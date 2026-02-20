@@ -1,0 +1,13 @@
+[
+  {
+    "id": "admin-001",
+    "name": "管理员",
+    "username": "admin",
+    "password": "meijiehua",
+    "role": "admin",
+    "avatar": "",
+    "bio": "",
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "lastLogin": "2026-02-20T12:31:37.300Z"
+  }
+]
