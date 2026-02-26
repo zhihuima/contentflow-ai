@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Users, X, Loader2 } from 'lucide-react';
 
 interface UserItem {
     id: string;
@@ -316,7 +317,7 @@ export default function AdminPage() {
                 <div className="admin-header">
                     <div>
                         <h1>
-                            <span className="icon">👤</span>
+                            <span className="icon"><Users size={18} /></span>
                             用户管理
                         </h1>
                         <div className="admin-subtitle">管理平台用户账号、角色和权限</div>
@@ -326,7 +327,7 @@ export default function AdminPage() {
                     </button>
                 </div>
 
-                {error && <div className="error-msg">{error} <button className="admin-btn admin-btn-ghost" onClick={() => setError('')} style={{ marginLeft: 8, fontSize: '0.75rem' }}>✕</button></div>}
+                {error && <div className="error-msg">{error} <button className="admin-btn admin-btn-ghost" onClick={() => setError('')} style={{ marginLeft: 8, fontSize: '0.75rem' }}><X size={14} /></button></div>}
 
                 {/* Stats */}
                 <div className="admin-stats">
@@ -351,9 +352,9 @@ export default function AdminPage() {
                 {/* Table */}
                 <div className="admin-table-wrap">
                     {loading ? (
-                        <div className="empty-state"><div className="empty-icon">⏳</div>加载中...</div>
+                        <div className="empty-state"><div className="empty-icon"><Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} /></div>加载中...</div>
                     ) : users.length === 0 ? (
-                        <div className="empty-state"><div className="empty-icon">👥</div>暂无用户</div>
+                        <div className="empty-state"><div className="empty-icon"><Users size={32} /></div>暂无用户</div>
                     ) : (
                         <table className="admin-table">
                             <thead>

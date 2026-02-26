@@ -15,7 +15,7 @@ export interface KnowledgeChunk {
     use_as: string;
 }
 
-type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish';
+type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate';
 
 /**
  * 根据用户输入的文本检索最相关的知识块。
@@ -138,10 +138,10 @@ export function formatChunksForPrompt(chunks: KnowledgeChunk[], mode: CreationMo
     text += `以下素材可用于增强${platformLabel}的创作质量，请根据主题选择性使用：\n\n`;
 
     for (const chunk of chunks) {
-        const typeLabel = chunk.type === 'hook' ? '🎣 钩子/标题素材'
-            : chunk.type === 'story' ? '📖 案例故事'
-                : chunk.type === 'strategy' ? '📋 方法策略'
-                    : '💡 洞见金句';
+        const typeLabel = chunk.type === 'hook' ? '[钩子] 钩子/标题素材'
+            : chunk.type === 'story' ? '[故事] 案例故事'
+                : chunk.type === 'strategy' ? '[策略] 方法策略'
+                    : '[金句] 洞见金句';
 
         const sourceLabel = chunk.source ? `《${chunk.source}》` : '《薛兆丰经济学讲义》';
 

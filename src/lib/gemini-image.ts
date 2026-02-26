@@ -56,17 +56,20 @@ export async function generateImage(
 
         const data = await response.json();
 
-        // 提取 base64 图片数据
+        // 提取 base64 图片数据（兼容 camelCase 和 snake_case 两种格式）
         const candidate = data.candidates?.[0];
         const part = candidate?.content?.parts?.[0];
 
-        if (!part?.inline_data?.data) {
+        // API 可能返回 inlineData (camelCase) 或 inline_data (snake_case)
+        const inlineData = part?.inlineData || part?.inline_data;
+
+        if (!inlineData?.data) {
             console.error('[Gemini Image] No image data in response:', JSON.stringify(data).slice(0, 300));
             return null;
         }
 
-        const base64 = part.inline_data.data;
-        const mimeType = part.inline_data.mime_type || 'image/png';
+        const base64 = inlineData.data;
+        const mimeType = inlineData.mimeType || inlineData.mime_type || 'image/png';
 
         console.log(`[Gemini Image] Generated successfully (${mimeType}, ${Math.round(base64.length / 1024)}KB)`);
 

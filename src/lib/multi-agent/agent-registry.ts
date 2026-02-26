@@ -11,7 +11,7 @@ export function registerAgent(config: AgentConfig): void {
         console.warn(`[AgentRegistry] Agent "${config.id}" already registered, overwriting.`);
     }
     agents.set(config.id, config);
-    console.log(`[AgentRegistry] ✅ Registered: ${config.name} (${config.id})`);
+    console.log(`[AgentRegistry] [OK] Registered: ${config.name} (${config.id})`);
 }
 
 /** 批量注册 */

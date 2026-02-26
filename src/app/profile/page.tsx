@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { Crown, User, CheckCircle, Lock } from 'lucide-react';
 
 interface UserProfile {
     id: string;
@@ -13,17 +14,6 @@ interface UserProfile {
     createdAt: string;
     lastLogin: string;
 }
-
-interface ResultHistoryEntry {
-    id: string;
-    mode: string;
-    title: string;
-    summary: string;
-    score: number | null;
-    createdAt: number;
-}
-
-const RESULT_HISTORY_KEY = 'contentflow_result_history';
 
 export default function ProfilePage() {
     const router = useRouter();
@@ -38,11 +28,6 @@ export default function ProfilePage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-    const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
-
-    // History
-    const [resultHistory, setResultHistory] = useState<ResultHistoryEntry[]>([]);
-    const [historyFilter, setHistoryFilter] = useState('all');
 
     const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,13 +49,6 @@ export default function ProfilePage() {
     useEffect(() => {
         fetchUser();
     }, [fetchUser]);
-
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
-            if (stored) setResultHistory(JSON.parse(stored));
-        } catch { /* ignore */ }
-    }, []);
 
     const showMessage = (type: 'success' | 'error', text: string) => {
         setMessage({ type, text });
@@ -137,27 +115,6 @@ export default function ProfilePage() {
         } catch { showMessage('error', '上传失败'); }
     };
 
-    const deleteResultHistory = (id: string) => {
-        setResultHistory(prev => {
-            const updated = prev.filter(e => e.id !== id);
-            try { localStorage.setItem(RESULT_HISTORY_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
-            return updated;
-        });
-    };
-
-    const clearAllHistory = () => {
-        setResultHistory([]);
-        try { localStorage.removeItem(RESULT_HISTORY_KEY); } catch { /* ignore */ }
-    };
-
-    const filteredHistory = historyFilter === 'all'
-        ? resultHistory
-        : resultHistory.filter(e => e.mode === historyFilter);
-
-    const modeLabels: Record<string, string> = {
-        video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色',
-    };
-
     if (loading) {
         return (
             <div className="profile-loading">
@@ -214,10 +171,6 @@ export default function ProfilePage() {
                 </div>
                 <div className="profile-stats">
                     <div className="profile-stat">
-                        <span className="profile-stat-value">{resultHistory.length}</span>
-                        <span className="profile-stat-label">创作记录</span>
-                    </div>
-                    <div className="profile-stat">
                         <span className="profile-stat-value">
                             {user.createdAt ? new Date(user.createdAt).toLocaleDateString('zh-CN') : '-'}
                         </span>
@@ -232,189 +185,139 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="profile-tabs">
-                <button
-                    className={`profile-tab ${activeTab === 'profile' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('profile')}
-                >
-                    个人设置
-                </button>
-                <button
-                    className={`profile-tab ${activeTab === 'history' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('history')}
-                >
-                    创作历史 {resultHistory.length > 0 && <span className="profile-tab-badge">{resultHistory.length}</span>}
-                </button>
-            </div>
-
             {/* Profile Settings */}
-            {activeTab === 'profile' && (
-                <div className="profile-settings">
-                    {/* Basic Info */}
-                    <div className="profile-section">
-                        <h2 className="profile-section-title">基本信息</h2>
-                        <div className="profile-form">
-                            <div className="profile-field">
-                                <label>用户名</label>
-                                <input type="text" value={user.username} disabled />
-                                <span className="profile-field-hint">用户名不可修改</span>
-                            </div>
-                            <div className="profile-field">
-                                <label>昵称</label>
-                                <input
-                                    type="text"
-                                    value={editName}
-                                    onChange={e => setEditName(e.target.value)}
-                                    placeholder="输入昵称"
-                                />
-                            </div>
-                            <div className="profile-field">
-                                <label>个人简介</label>
-                                <textarea
-                                    value={editBio}
-                                    onChange={e => setEditBio(e.target.value)}
-                                    placeholder="写一句介绍自己..."
-                                    rows={3}
-                                />
-                            </div>
-                            <button
-                                className="profile-save-btn"
-                                onClick={handleSaveProfile}
-                                disabled={saving}
-                            >
-                                {saving ? '保存中...' : '保存修改'}
-                            </button>
+            <div className="profile-settings">
+                {/* Basic Info */}
+                <div className="profile-section">
+                    <h2 className="profile-section-title">基本信息</h2>
+                    <div className="profile-form">
+                        <div className="profile-field">
+                            <label>用户名</label>
+                            <input type="text" value={user.username} disabled />
+                            <span className="profile-field-hint">用户名不可修改</span>
                         </div>
-                    </div>
-
-                    {/* Password Change */}
-                    <div className="profile-section">
-                        <h2 className="profile-section-title">修改密码</h2>
-                        <div className="profile-form">
-                            <div className="profile-field">
-                                <label>旧密码</label>
-                                <input
-                                    type="password"
-                                    value={oldPassword}
-                                    onChange={e => setOldPassword(e.target.value)}
-                                    placeholder="输入当前密码"
-                                />
-                            </div>
-                            <div className="profile-field">
-                                <label>新密码</label>
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={e => setNewPassword(e.target.value)}
-                                    placeholder="至少 6 位"
-                                />
-                            </div>
-                            <div className="profile-field">
-                                <label>确认新密码</label>
-                                <input
-                                    type="password"
-                                    value={confirmPassword}
-                                    onChange={e => setConfirmPassword(e.target.value)}
-                                    placeholder="再次输入新密码"
-                                />
-                            </div>
-                            <button
-                                className="profile-save-btn"
-                                onClick={handleChangePassword}
-                                disabled={saving}
-                            >
-                                {saving ? '修改中...' : '修改密码'}
-                            </button>
+                        <div className="profile-field">
+                            <label>昵称</label>
+                            <input
+                                type="text"
+                                value={editName}
+                                onChange={e => setEditName(e.target.value)}
+                                placeholder="输入昵称"
+                            />
                         </div>
+                        <div className="profile-field">
+                            <label>个人简介</label>
+                            <textarea
+                                value={editBio}
+                                onChange={e => setEditBio(e.target.value)}
+                                placeholder="写一句介绍自己..."
+                                rows={3}
+                            />
+                        </div>
+                        <button
+                            className="profile-save-btn"
+                            onClick={handleSaveProfile}
+                            disabled={saving}
+                        >
+                            {saving ? '保存中...' : '保存修改'}
+                        </button>
                     </div>
+                </div>
 
-                    {/* Account Info */}
-                    <div className="profile-section">
-                        <h2 className="profile-section-title">账户信息</h2>
-                        <div className="profile-info-grid">
-                            <div className="profile-info-item">
-                                <span className="profile-info-label">角色</span>
-                                <span className="profile-info-value">{user.role === 'admin' ? '管理员' : '普通用户'}</span>
-                            </div>
-                            <div className="profile-info-item">
-                                <span className="profile-info-label">注册时间</span>
-                                <span className="profile-info-value">
-                                    {user.createdAt ? new Date(user.createdAt).toLocaleString('zh-CN') : '-'}
-                                </span>
-                            </div>
-                            <div className="profile-info-item">
-                                <span className="profile-info-label">上次登录</span>
-                                <span className="profile-info-value">
-                                    {user.lastLogin ? new Date(user.lastLogin).toLocaleString('zh-CN') : '-'}
-                                </span>
-                            </div>
-                            <div className="profile-info-item">
-                                <span className="profile-info-label">用户 ID</span>
-                                <span className="profile-info-value" style={{ fontSize: '0.75rem', opacity: 0.6 }}>{user.id}</span>
-                            </div>
+                {/* Password Change */}
+                <div className="profile-section">
+                    <h2 className="profile-section-title">修改密码</h2>
+                    <div className="profile-form">
+                        <div className="profile-field">
+                            <label>旧密码</label>
+                            <input
+                                type="password"
+                                value={oldPassword}
+                                onChange={e => setOldPassword(e.target.value)}
+                                placeholder="输入当前密码"
+                            />
+                        </div>
+                        <div className="profile-field">
+                            <label>新密码</label>
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                                placeholder="至少 6 位"
+                            />
+                        </div>
+                        <div className="profile-field">
+                            <label>确认新密码</label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={e => setConfirmPassword(e.target.value)}
+                                placeholder="再次输入新密码"
+                            />
+                        </div>
+                        <button
+                            className="profile-save-btn"
+                            onClick={handleChangePassword}
+                            disabled={saving}
+                        >
+                            {saving ? '修改中...' : '修改密码'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* Account Info */}
+                <div className="profile-section">
+                    <h2 className="profile-section-title">账户信息</h2>
+                    <div className="profile-info-grid">
+                        <div className="profile-info-item">
+                            <span className="profile-info-label">角色</span>
+                            <span className="profile-info-value">{user.role === 'admin' ? '管理员' : '普通用户'}</span>
+                        </div>
+                        <div className="profile-info-item">
+                            <span className="profile-info-label">注册时间</span>
+                            <span className="profile-info-value">
+                                {user.createdAt ? new Date(user.createdAt).toLocaleString('zh-CN') : '-'}
+                            </span>
+                        </div>
+                        <div className="profile-info-item">
+                            <span className="profile-info-label">上次登录</span>
+                            <span className="profile-info-value">
+                                {user.lastLogin ? new Date(user.lastLogin).toLocaleString('zh-CN') : '-'}
+                            </span>
+                        </div>
+                        <div className="profile-info-item">
+                            <span className="profile-info-label">用户 ID</span>
+                            <span className="profile-info-value" style={{ fontSize: '0.75rem', opacity: 0.6 }}>{user.id}</span>
                         </div>
                     </div>
                 </div>
-            )}
 
-            {/* History Tab */}
-            {activeTab === 'history' && (
-                <div className="profile-history">
-                    <div className="profile-history-toolbar">
-                        <div className="profile-history-filters">
-                            {['all', 'video', 'xhs', 'douyin', 'polish'].map(f => (
-                                <button
-                                    key={f}
-                                    className={`profile-filter-btn ${historyFilter === f ? 'active' : ''}`}
-                                    onClick={() => setHistoryFilter(f)}
-                                >
-                                    {f === 'all' ? '全部' : modeLabels[f] || f}
-                                </button>
-                            ))}
-                        </div>
-                        {resultHistory.length > 0 && (
-                            <button className="profile-clear-btn" onClick={clearAllHistory}>
-                                清空全部
-                            </button>
-                        )}
+                {/* Role & Permissions */}
+                <div className="profile-section">
+                    <h2 className="profile-section-title">角色与权限</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        <span className={`profile-role-badge ${user.role}`} style={{ fontSize: '1rem', padding: '6px 16px' }}>
+                            {user.role === 'admin' ? <><Crown size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 管理员</> : <><User size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 普通用户</>}
+                        </span>
                     </div>
-
-                    {filteredHistory.length === 0 ? (
-                        <div className="profile-history-empty">
-                            <p>暂无创作记录</p>
-                        </div>
-                    ) : (
-                        <div className="profile-history-list">
-                            {filteredHistory.map(entry => (
-                                <div key={entry.id} className="profile-history-card">
-                                    <div className="profile-history-card-header">
-                                        <span className={`profile-history-mode mode-${entry.mode}`}>
-                                            {modeLabels[entry.mode] || entry.mode}
-                                        </span>
-                                        {entry.score !== null && (
-                                            <span className="profile-history-score">{entry.score}</span>
-                                        )}
-                                    </div>
-                                    <h3 className="profile-history-title">{entry.title}</h3>
-                                    <p className="profile-history-summary">{entry.summary}</p>
-                                    <div className="profile-history-card-footer">
-                                        <span className="profile-history-time">
-                                            {new Date(entry.createdAt).toLocaleString('zh-CN')}
-                                        </span>
-                                        <button
-                                            className="profile-history-delete"
-                                            onClick={() => deleteResultHistory(entry.id)}
-                                        >
-                                            删除
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <div className="profile-info-grid">
+                        {[
+                            { label: '创作工作台', allowed: true },
+                            { label: '内容润色', allowed: true },
+                            { label: '内容模仿', allowed: true },
+                            { label: '历史记录管理', allowed: true },
+                            { label: '收藏 & 分享', allowed: true },
+                            { label: '用户管理', allowed: user.role === 'admin' },
+                            { label: '系统配置', allowed: user.role === 'admin' },
+                        ].map(perm => (
+                            <div key={perm.label} className="profile-info-item" style={{ opacity: perm.allowed ? 1 : 0.4 }}>
+                                <span className="profile-info-label">{perm.allowed ? <CheckCircle size={16} style={{ color: 'var(--success)' }} /> : <Lock size={16} />}</span>
+                                <span className="profile-info-value">{perm.label}</span>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 }

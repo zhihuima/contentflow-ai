@@ -17,31 +17,61 @@ export interface ClaudeRequest {
     temperature?: number;
 }
 
-/** 非流式调用 Claude，返回完整文本 */
-export async function callClaude(req: ClaudeRequest): Promise<string> {
-    const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: req.maxTokens || 4096,
-            temperature: req.temperature ?? 0.7,
-            system: req.system,
-            messages: req.messages,
-        }),
-    });
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000; // 2s, 4s, 8s exponential backoff
 
-    if (!response.ok) {
+function isRetryableStatus(status: number): boolean {
+    return status === 429 || status === 529;
+}
+
+async function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** 非流式调用 Claude，返回完整文本（含自动重试） */
+export async function callClaude(req: ClaudeRequest): Promise<string> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (attempt > 0) {
+            const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+            console.log(`[Claude] 第 ${attempt} 次重试，等待 ${delay}ms...`);
+            await sleep(delay);
+        }
+
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: req.maxTokens || 4096,
+                temperature: req.temperature ?? 0.7,
+                system: req.system,
+                messages: req.messages,
+            }),
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            return data.content[0].text;
+        }
+
         const errorText = await response.text();
-        throw new Error(`Claude API error: ${response.status} ${errorText}`);
+        lastError = new Error(`Claude API error: ${response.status} ${errorText}`);
+
+        if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+            console.warn(`[Claude] ${response.status} 过载，准备重试...`);
+            continue;
+        }
+
+        throw lastError;
     }
 
-    const data = await response.json();
-    return data.content[0].text;
+    throw lastError || new Error('Claude API: 未知错误');
 }
 
 /** 流式调用 Claude，返回 ReadableStream */
@@ -51,26 +81,48 @@ export function callClaudeStream(req: ClaudeRequest): ReadableStream {
     return new ReadableStream({
         async start(controller) {
             try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': ANTHROPIC_API_KEY,
-                        'anthropic-version': '2023-06-01',
-                    },
-                    body: JSON.stringify({
-                        model: 'claude-sonnet-4-20250514',
-                        max_tokens: req.maxTokens || 4096,
-                        temperature: req.temperature ?? 0.7,
-                        system: req.system,
-                        messages: req.messages,
-                        stream: true,
-                    }),
-                });
+                let response: Response | null = null;
+                let lastErrorText = '';
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: errorText })}\n\n`));
+                for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+                    if (attempt > 0) {
+                        const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+                        console.log(`[Claude Stream] 第 ${attempt} 次重试，等待 ${delay}ms...`);
+                        await sleep(delay);
+                    }
+
+                    response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': ANTHROPIC_API_KEY,
+                            'anthropic-version': '2023-06-01',
+                        },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: req.maxTokens || 4096,
+                            temperature: req.temperature ?? 0.7,
+                            system: req.system,
+                            messages: req.messages,
+                            stream: true,
+                        }),
+                    });
+
+                    if (response.ok) break;
+
+                    lastErrorText = await response.text();
+                    if (isRetryableStatus(response.status) && attempt < MAX_RETRIES) {
+                        console.warn(`[Claude Stream] ${response.status} 过载，准备重试...`);
+                        continue;
+                    }
+
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: lastErrorText })}\n\n`));
+                    controller.close();
+                    return;
+                }
+
+                if (!response || !response.ok) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: lastErrorText || '未知错误' })}\n\n`));
                     controller.close();
                     return;
                 }

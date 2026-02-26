@@ -18,7 +18,7 @@ export const writerAgent: AgentConfig = {
         const mode = ctx.mode;
         const ragContext = (ctx.memory.ragContext as string) || '';
         const revisionNote = ctx.revisionFeedback
-            ? `\n\n⚠️ 上一轮审核反馈（请重点改进）：${ctx.revisionFeedback}`
+            ? `\n\n[注意] 上一轮审核反馈（请重点改进）：${ctx.revisionFeedback}`
             : '';
 
         if (mode === 'polish') {
@@ -42,7 +42,22 @@ export const writerAgent: AgentConfig = {
         }
 
         const requirement = ctx.memory.parsedRequirement as ParsedRequirement;
-        const selectedTopic = ctx.memory.selectedTopic as TopicPlan;
+
+        // Resolve selectedTopic: check direct object first, then resolve from topicPlans + selectedTopicId
+        let selectedTopic = ctx.memory.selectedTopic as TopicPlan | undefined;
+        if (!selectedTopic && ctx.memory.topicPlans) {
+            const plans = ctx.memory.topicPlans as TopicPlan[];
+            const selectedId = ctx.memory.selectedTopicId as number | undefined;
+            if (selectedId != null) {
+                selectedTopic = plans.find(t => t.id === selectedId) || plans[0];
+            } else if (plans.length > 0) {
+                // Auto-select highest scoring topic
+                selectedTopic = plans.reduce((best, t) => t.traffic_score > best.traffic_score ? t : best, plans[0]);
+            }
+            if (selectedTopic) {
+                ctx.memory.selectedTopic = selectedTopic;
+            }
+        }
 
         if (!requirement || !selectedTopic) {
             return { status: 'failed', data: null, feedback: '缺少需求解析或选题数据' };

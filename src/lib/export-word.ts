@@ -183,7 +183,7 @@ export async function exportToWord(script: Script) {
             children.push(new Paragraph({
                 spacing: { after: 100 },
                 children: [
-                    new TextRun({ text: '🎵 BGM：', bold: true, size: 20 }),
+                    new TextRun({ text: '♪ BGM：', bold: true, size: 20 }),
                     new TextRun({ text: script.bgm_suggestion, size: 20 }),
                 ],
             }));
@@ -192,7 +192,7 @@ export async function exportToWord(script: Script) {
             children.push(new Paragraph({
                 spacing: { after: 80 },
                 children: [
-                    new TextRun({ text: `📸 建议 ${i + 1}：`, bold: true, size: 20 }),
+                    new TextRun({ text: `▸ 建议 ${i + 1}：`, bold: true, size: 20 }),
                     new TextRun({ text: tip, size: 20 }),
                 ],
             }));

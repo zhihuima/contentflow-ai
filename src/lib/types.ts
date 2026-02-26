@@ -187,7 +187,7 @@ export interface PlatformAdvice {
 }
 
 /** 创作模式 */
-export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish';
+export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate';
 
 /** 工作流状态 */
 export type WorkflowStage = 'idle' | 'parsing' | 'planning' | 'writing' | 'optimizing' | 'reviewing' | 'done' | 'error';
@@ -209,4 +209,5 @@ export interface WorkflowState {
     platformAdvice: PlatformAdvice | null;
     error: string | null;
     streamingText: string;
+    imitateResult: import('@/lib/agents/content-imitator').ImitateResult | null;
 }
