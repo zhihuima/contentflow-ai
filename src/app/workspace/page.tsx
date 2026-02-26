@@ -43,6 +43,15 @@ const STAGES: { key: WorkflowStage; label: string; step: number }[] = [
 const STAGE_ORDER: WorkflowStage[] = ['parsing', 'planning', 'writing', 'optimizing', 'reviewing', 'done'];
 
 const AUDIENCE_AGE_OPTIONS = ['不限', '18-24岁', '25-34岁', '35-44岁', '45-54岁', '55岁以上'];
+
+const SCRIPT_TYPE_OPTIONS = ['口播脚本', '画外音解说', '画面故事', '情景再现', '产品展示'];
+const SCRIPT_TYPE_DESC: Record<string, string> = {
+    '口播脚本': '真人面对镜头说话，适合知识类/情感类',
+    '画外音解说': '画面+配音旁白，适合风景/产品/教程',
+    '画面故事': '纯画面叙事，AI可生成视频',
+    '情景再现': '生活化场景演绎，适合剧情类',
+    '产品展示': '产品特写+使用场景，适合带货',
+};
 const AUDIENCE_GENDER_OPTIONS = ['不限', '偏男性', '偏女性'];
 const DURATION_OPTIONS: VideoDuration[] = ['超短(15-30s)', '短(30-60s)', '中(1-3min)', '长(3-5min)'];
 const TONE_OPTIONS: Tone[] = ['专业权威', '轻松幽默', '认真走心', '情绪张力', '口语化'];
@@ -148,6 +157,15 @@ function WorkspaceInner() {
     const [selDuration, setSelDuration] = useState<VideoDuration>('短(30-60s)');
     const [selTone, setSelTone] = useState<Tone>('轻松幽默');
     const [selIndustry, setSelIndustry] = useState('不限');
+    const [selScriptType, setSelScriptType] = useState('口播脚本');
+
+    // Video generation states
+    const [videoGenStatus, setVideoGenStatus] = useState<'idle' | 'submitting' | 'processing' | 'done' | 'error'>('idle');
+    const [videoGenTaskId, setVideoGenTaskId] = useState('');
+    const [videoGenPrompt, setVideoGenPrompt] = useState('');
+    const [videoGenResult, setVideoGenResult] = useState<{ videoUrl: string; coverUrl?: string } | null>(null);
+    const [videoGenError, setVideoGenError] = useState('');
+    const videoGenPollRef = useRef<NodeJS.Timeout | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const historyRef = useRef<HTMLDivElement>(null);
 
@@ -701,6 +719,9 @@ function WorkspaceInner() {
         extras.push(`视频时长：${selDuration}`);
         extras.push(TONE_PROMPT_MAP[selTone]);
         if (selIndustry !== '不限') extras.push(`行业：${selIndustry}`);
+        if ((state.mode === 'douyin' || state.mode === 'video') && selScriptType !== '口播脚本') {
+            extras.push(`脚本类型：${selScriptType}（不是口播，需要侧重画面描述和场景切换）`);
+        }
         if (extras.length > 0) enrichedInput += '\n' + extras.join('，');
 
         // Append advanced config if provided
@@ -1402,6 +1423,124 @@ function WorkspaceInner() {
                     />
                 )}
 
+                {/* AI Video Generation — 非口播脚本生成视频 */}
+                {state.script && isStageDone('writing') && selScriptType !== '口播脚本' && (state.mode === 'douyin' || state.mode === 'video') && (
+                    <div className="section-card" style={{ borderColor: 'rgba(139,92,246,0.3)', background: 'linear-gradient(135deg, rgba(139,92,246,0.03), rgba(99,102,241,0.03))' }}>
+                        <div className="section-header">
+                            <div className="section-title" style={{ color: '#8b5cf6' }}>🎬 AI 视频生成</div>
+                        </div>
+                        {videoGenStatus === 'idle' && (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <p style={{ fontSize: '0.88rem', color: '#64748b', marginBottom: 16, lineHeight: 1.6 }}>
+                                    当前脚本类型为「{selScriptType}」，可以用 AI 将脚本自动转化为视频。<br />
+                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>即梦 AI 将根据脚本内容智能生成 5 秒高质量短视频画面</span>
+                                </p>
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                                    {(['16:9', '9:16', '1:1'] as const).map(r => (
+                                        <button key={r} className="btn btn-ghost" style={{ padding: '8px 18px' }}
+                                            onClick={async () => {
+                                                const scriptData = state.qualityReview?.final_script || state.script;
+                                                if (!scriptData) return;
+                                                setVideoGenStatus('submitting');
+                                                setVideoGenError('');
+                                                setVideoGenResult(null);
+                                                try {
+                                                    const res = await fetch('/api/video-gen/submit', {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            scriptContent: scriptData.full_narration || scriptData.main_body?.map(s => s.narration).join('\n') || '',
+                                                            scriptType: selScriptType,
+                                                            ratio: r,
+                                                        }),
+                                                    });
+                                                    const data = await res.json();
+                                                    if (!res.ok) {
+                                                        setVideoGenStatus('error');
+                                                        setVideoGenError(data.error || '提交失败');
+                                                        return;
+                                                    }
+                                                    setVideoGenTaskId(data.taskId);
+                                                    setVideoGenPrompt(data.prompt);
+                                                    setVideoGenStatus('processing');
+                                                    const poll = setInterval(async () => {
+                                                        try {
+                                                            const sr = await fetch('/api/video-gen/status', {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ taskId: data.taskId }),
+                                                            });
+                                                            const sd = await sr.json();
+                                                            if (sd.status === 'done') {
+                                                                clearInterval(poll);
+                                                                setVideoGenResult({ videoUrl: sd.videoUrl, coverUrl: sd.coverUrl });
+                                                                setVideoGenStatus('done');
+                                                            } else if (sd.status === 'failed') {
+                                                                clearInterval(poll);
+                                                                setVideoGenStatus('error');
+                                                                setVideoGenError(sd.error || '生成失败');
+                                                            }
+                                                        } catch { /* continue polling */ }
+                                                    }, 5000);
+                                                    videoGenPollRef.current = poll;
+                                                } catch (e: unknown) {
+                                                    setVideoGenStatus('error');
+                                                    setVideoGenError(e instanceof Error ? e.message : '请求失败');
+                                                }
+                                            }}
+                                        >
+                                            生成 {r} 视频
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {videoGenStatus === 'submitting' && (
+                            <div style={{ textAlign: 'center', padding: '24px 0', color: '#64748b' }}>
+                                <div style={{ marginBottom: 8, fontSize: '1.5rem' }}>🎬</div>
+                                正在将脚本转化为电影级视频描述...
+                            </div>
+                        )}
+                        {videoGenStatus === 'processing' && (
+                            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                                <div style={{ marginBottom: 8, fontSize: '1.5rem' }}>⏳</div>
+                                <div style={{ fontSize: '0.92rem', fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>即梦 AI 正在生成视频...</div>
+                                <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginBottom: 14 }}>通常需要 30-60 秒，请耐心等待</div>
+                                {videoGenPrompt && (
+                                    <div style={{ fontSize: '0.78rem', color: '#64748b', background: '#f8fafc', padding: '10px 14px', borderRadius: 10, textAlign: 'left', lineHeight: 1.6 }}>
+                                        <strong>视频描述：</strong>{videoGenPrompt}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        {videoGenStatus === 'done' && videoGenResult && (
+                            <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#16a34a', marginBottom: 14 }}>✅ 视频生成完成！</div>
+                                {videoGenResult.videoUrl && (
+                                    <video src={videoGenResult.videoUrl} controls
+                                        style={{ width: '100%', maxWidth: 520, borderRadius: 14, margin: '0 auto', display: 'block' }} />
+                                )}
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 14 }}>
+                                    {videoGenResult.videoUrl && (
+                                        <a href={videoGenResult.videoUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                                            下载视频
+                                        </a>
+                                    )}
+                                    <button className="btn btn-ghost" onClick={() => { setVideoGenStatus('idle'); setVideoGenResult(null); }}>
+                                        重新生成
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {videoGenStatus === 'error' && (
+                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                <div style={{ fontSize: '0.88rem', color: '#ef4444', marginBottom: 10 }}>❌ {videoGenError}</div>
+                                <button className="btn btn-ghost" onClick={() => setVideoGenStatus('idle')}>重试</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Traffic Optimize Report */}
                 {state.trafficReport && isStageDone('optimizing') && (
                     <TrafficReportDisplay report={state.trafficReport} />
@@ -1703,6 +1842,11 @@ function WorkspaceInner() {
                                     {state.mode !== 'xhs' && (
                                         <select className="input-mini-select" value={selDuration} onChange={e => setSelDuration(e.target.value as VideoDuration)} title="视频时长">
                                             {DURATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                    )}
+                                    {(state.mode === 'douyin' || state.mode === 'video') && (
+                                        <select className="input-mini-select" value={selScriptType} onChange={e => setSelScriptType(e.target.value)} title="脚本类型" style={{ minWidth: 100 }}>
+                                            {SCRIPT_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                                         </select>
                                     )}
                                     <select className="input-mini-select" value={selTone} onChange={e => setSelTone(e.target.value as Tone)} title="语气风格">
