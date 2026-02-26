@@ -22,7 +22,7 @@ export default function MeetingPage() {
     const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
     const [messages, setMessages] = useState<MeetingMessage[]>([]);
     const [summary, setSummary] = useState<{
-        keyPoints: string[]; decisions: string[]; actionItems: { assignee: string; task: string }[]; nextSteps: string[];
+        keyPoints: string[]; disagreements?: string[]; highlights?: string[]; actionItems: { assignee: string; task: string }[]; nextSteps: string[];
     } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [expandedDept, setExpandedDept] = useState<string | null>('content');
@@ -422,25 +422,34 @@ export default function MeetingPage() {
 
                                 {summary.keyPoints?.length > 0 && (
                                     <div className="summary-section">
-                                        <h4>核心要点</h4>
+                                        <h4>✅ 核心共识</h4>
                                         <ul className="summary-list">
                                             {summary.keyPoints.map((p, i) => <li key={i}>{p}</li>)}
                                         </ul>
                                     </div>
                                 )}
 
-                                {summary.decisions?.length > 0 && (
+                                {summary.disagreements && summary.disagreements.length > 0 && (
                                     <div className="summary-section">
-                                        <h4>决策事项</h4>
+                                        <h4>⚡ 关键分歧</h4>
                                         <ul className="summary-list">
-                                            {summary.decisions.map((d, i) => <li key={i}>{d}</li>)}
+                                            {summary.disagreements.map((d, i) => <li key={i} style={{ borderLeft: '2px solid #f59e0b', paddingLeft: 14 }}>{d}</li>)}
+                                        </ul>
+                                    </div>
+                                )}
+
+                                {summary.highlights && summary.highlights.length > 0 && (
+                                    <div className="summary-section">
+                                        <h4>💡 亮点观点</h4>
+                                        <ul className="summary-list">
+                                            {summary.highlights.map((h, i) => <li key={i} style={{ borderLeft: '2px solid #8b5cf6', paddingLeft: 14 }}>{h}</li>)}
                                         </ul>
                                     </div>
                                 )}
 
                                 {summary.actionItems?.length > 0 && (
                                     <div className="summary-section">
-                                        <h4>行动项</h4>
+                                        <h4>📋 行动建议</h4>
                                         {summary.actionItems.map((item, i) => (
                                             <div key={i} className="action-item">
                                                 <CheckCircle size={14} color="#6366f1" />
@@ -453,7 +462,7 @@ export default function MeetingPage() {
 
                                 {summary.nextSteps?.length > 0 && (
                                     <div className="summary-section">
-                                        <h4>后续计划</h4>
+                                        <h4>🔜 后续计划</h4>
                                         <ul className="summary-list">
                                             {summary.nextSteps.map((s, i) => <li key={i}>{s}</li>)}
                                         </ul>
