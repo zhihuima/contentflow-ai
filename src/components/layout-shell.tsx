@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles } from 'lucide-react';
+import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks } from 'lucide-react';
 
 interface NavItem {
     key: string;
@@ -300,6 +300,13 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     >
                         <MessageSquare size={16} />
                         <span>AI 会议室</span>
+                    </button>
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/tasks' ? 'active' : ''}`}
+                        onClick={() => { router.push('/tasks'); setSidebarOpen(false); }}
+                    >
+                        <ListChecks size={16} />
+                        <span>任务中心</span>
                     </button>
                     <button
                         className={`sidebar-nav-link ${pathname === '/workspace' ? 'active' : ''}`}
