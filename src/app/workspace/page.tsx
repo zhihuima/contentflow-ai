@@ -1433,7 +1433,7 @@ function WorkspaceInner() {
                             <div style={{ textAlign: 'center', padding: '20px 0' }}>
                                 <p style={{ fontSize: '0.88rem', color: '#64748b', marginBottom: 16, lineHeight: 1.6 }}>
                                     当前脚本类型为「{selScriptType}」，可以用 AI 将脚本自动转化为视频。<br />
-                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>即梦 AI 将根据脚本内容智能生成 5 秒高质量短视频画面</span>
+                                    <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>即梦 AI 将根据脚本长度自动生成 5~10 秒高质量短视频画面</span>
                                 </p>
                                 <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                                     {(['16:9', '9:16', '1:1'] as const).map(r => (

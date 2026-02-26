@@ -48,10 +48,13 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
+        // 根据脚本长度自动判断视频时长：短脚本5秒，其余默认10秒
+        const autoDuration: 5 | 10 = scriptContent.length < 100 ? 5 : 10;
+
         // 提交即梦视频生成任务
         const result = await submitVideoGenTask({
             prompt,
-            duration: 5,
+            duration: autoDuration,
             ratio: ratio || '16:9',
         });
 
