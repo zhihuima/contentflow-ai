@@ -5,9 +5,10 @@
 
 import crypto from 'crypto';
 
-// 与 volcengine-image.ts 使用相同环境变量（Zeabur 已配置）
-const VOLC_ACCESS_KEY = process.env.VOLC_ACCESS_KEY_ID || '';
-const VOLC_SECRET_KEY = process.env.VOLC_SECRET_ACCESS_KEY || '';
+// 即梦视频生成需要专用的 AK/SK（与图片生成的密钥可能不同）
+// 优先使用 JIMENG_* 密钥，没有则回退到 VOLC_*
+const VOLC_ACCESS_KEY = process.env.JIMENG_ACCESS_KEY || process.env.VOLC_ACCESS_KEY_ID || '';
+const VOLC_SECRET_KEY = process.env.JIMENG_SECRET_KEY || process.env.VOLC_SECRET_ACCESS_KEY || '';
 
 const SERVICE = 'cv';
 const REGION = 'cn-north-1';
