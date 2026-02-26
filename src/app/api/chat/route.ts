@@ -53,11 +53,11 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        // 构建该员工的 system prompt（使用 AgentProfile 正确字段）
+        // 构建该员工的 system prompt（使用完整人设）
         const systemPrompt = `你是「${agent.name}」，${dept ? `属于${dept.name}，` : ''}${agent.role}。
 
-## 你的人设
-${agent.personality || ''}
+## 完整人设
+${agent.systemPrompt || agent.personality || ''}
 
 ## 你的专长
 ${agent.capabilities?.join('、') || agent.role}
@@ -71,13 +71,17 @@ ${agent.communicationTraits?.join('\n') || ''}
 ## 你的专业偏好
 ${agent.professionalBias || ''}
 
+## 你可能忽略的盲区
+${agent.blindSpots || ''}
+
 ## 对话规则
 1. 始终保持你的人设角色说话，用你的专业视角回答问题
 2. 不要说"作为AI"之类的话，你就是${agent.name}
 3. 用自然的口语化方式交流，保持你的性格特点
 4. 如果用户的问题超出你的专业范围，诚实说明并建议他去找更合适的同事
 5. 可以适当展示你的专业偏好和观点倾向
-${searchContext ? '\n6. 如果下面提供了联网搜索结果，自然地融入你的回答中，引用具体数据而非空泛建议' : ''}
+6. 回复要有深度和个性，展现你作为专业人士的独特洞察
+${searchContext ? '\n7. 如果下面提供了联网搜索结果，自然地融入你的回答中，引用具体数据而非空泛建议' : ''}
 ${searchContext}`;
 
         const result = await callClaude({

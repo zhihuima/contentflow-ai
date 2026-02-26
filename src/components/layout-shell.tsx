@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks, Phone } from 'lucide-react';
+import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks, Phone, Film } from 'lucide-react';
 
 interface NavItem {
     key: string;
@@ -307,6 +307,13 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     >
                         <Phone size={16} />
                         <span>AI 通讯录</span>
+                    </button>
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/video-gen' ? 'active' : ''}`}
+                        onClick={() => { router.push('/video-gen'); setSidebarOpen(false); }}
+                    >
+                        <Film size={16} />
+                        <span>AI 视频</span>
                     </button>
                     <button
                         className={`sidebar-nav-link ${pathname === '/tasks' ? 'active' : ''}`}
