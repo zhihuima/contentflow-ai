@@ -1,6 +1,6 @@
 // API: 提交即梦视频生成任务
 import { NextRequest, NextResponse } from 'next/server';
-import { submitVideoGenTask, scriptToVideoPrompt } from '@/lib/jimeng';
+import { submitVideoGenTask } from '@/lib/jimeng';
 import { callClaude } from '@/lib/claude';
 
 export async function POST(request: NextRequest) {

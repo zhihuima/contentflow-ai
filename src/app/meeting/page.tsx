@@ -5,12 +5,41 @@ import { useRouter } from 'next/navigation';
 import {
     MessageSquare, Users, Send, Mic, ChevronDown, ChevronRight,
     Play, Sparkles, FileText, CheckCircle, ArrowRight,
-    Building2, Plus, X,
+    Building2, Plus, X, Clock, Eye,
 } from 'lucide-react';
 import { DEPARTMENTS, getAllAgents, getAgent } from '@/lib/departments';
 import type { AgentProfile, Department } from '@/lib/departments';
 import type { MeetingMessage } from '@/lib/meeting-types';
 import type { MeetingYieldEvent } from '@/lib/meeting-engine';
+
+// ---- 会议历史 ----
+interface MeetingRecord {
+    id: string;
+    topic: string;
+    agents: string[];
+    messages: MeetingMessage[];
+    summary: { keyPoints: string[]; disagreements?: string[]; highlights?: string[]; actionItems: { assignee: string; task: string }[]; nextSteps: string[] } | null;
+    createdAt: string;
+}
+
+const MEETING_HISTORY_KEY = 'ai_meeting_history';
+
+function loadMeetingHistory(): MeetingRecord[] {
+    if (typeof window === 'undefined') return [];
+    try {
+        const saved = localStorage.getItem(MEETING_HISTORY_KEY);
+        return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+}
+
+function saveMeetingRecord(record: MeetingRecord) {
+    try {
+        const history = loadMeetingHistory();
+        history.unshift(record);
+        // 最多保存 20 条
+        localStorage.setItem(MEETING_HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
+    } catch { /* ignore */ }
+}
 
 export default function MeetingPage() {
     const router = useRouter();
@@ -27,6 +56,31 @@ export default function MeetingPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [expandedDept, setExpandedDept] = useState<string | null>('content');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [meetingHistory, setMeetingHistory] = useState<MeetingRecord[]>([]);
+    const [viewingHistory, setViewingHistory] = useState<MeetingRecord | null>(null);
+    const hasSavedRef = useRef(false);
+
+    // Load history on mount
+    useEffect(() => {
+        setMeetingHistory(loadMeetingHistory());
+    }, []);
+
+    // Save meeting when done
+    useEffect(() => {
+        if (phase === 'done' && messages.length > 0 && topic && !hasSavedRef.current) {
+            hasSavedRef.current = true;
+            const record: MeetingRecord = {
+                id: Date.now().toString(),
+                topic,
+                agents: selectedAgents,
+                messages,
+                summary,
+                createdAt: new Date().toLocaleString('zh-CN'),
+            };
+            saveMeetingRecord(record);
+            setMeetingHistory(loadMeetingHistory());
+        }
+    }, [phase, messages, topic, selectedAgents, summary]);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -127,6 +181,8 @@ export default function MeetingPage() {
         setTopic('');
         setUserContext('');
         setSelectedAgents([]);
+        hasSavedRef.current = false;
+        setViewingHistory(null);
     }
 
     return (
@@ -331,6 +387,46 @@ export default function MeetingPage() {
                     </div>
                 )}
 
+                {/* 历史会议记录 */}
+                {phase === 'setup' && meetingHistory.length > 0 && (
+                    <div style={{ maxWidth: 1200, marginTop: 24, background: 'white', borderRadius: 20, padding: 24, border: '1px solid #e2e8f0' }}>
+                        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <Clock size={16} /> 历史会议记录
+                        </h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                            {meetingHistory.slice(0, 10).map(record => (
+                                <div key={record.id}
+                                    onClick={() => {
+                                        setViewingHistory(record);
+                                        setTopic(record.topic);
+                                        setSelectedAgents(record.agents);
+                                        setMessages(record.messages);
+                                        setSummary(record.summary);
+                                        setPhase('done');
+                                    }}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
+                                        borderRadius: 12, border: '1px solid #e2e8f0', cursor: 'pointer',
+                                        transition: 'all 0.15s',
+                                    }}
+                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#6366f1'; }}
+                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#e2e8f0'; }}
+                                >
+                                    <MessageSquare size={14} style={{ color: '#6366f1', flexShrink: 0 }} />
+                                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {record.topic}
+                                        </div>
+                                        <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                                            {record.createdAt} · {record.agents.length}人参与 · {record.messages.length}条发言
+                                        </div>
+                                    </div>
+                                    <Eye size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {/* ---- 会议进行中 / 完成 ---- */}
                 {(phase === 'running' || phase === 'done') && (
                     <>
