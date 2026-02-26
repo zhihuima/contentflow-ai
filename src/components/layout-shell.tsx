@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Pencil, Share2, Star, Trash2, X, Menu } from 'lucide-react';
+import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles } from 'lucide-react';
 
 interface NavItem {
     key: string;
@@ -283,6 +283,32 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     <span className="new-task-icon">＋</span>
                     新建任务
                 </button>
+
+                {/* Platform navigation */}
+                <div className="sidebar-nav-section">
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/departments' ? 'active' : ''}`}
+                        onClick={() => { router.push('/departments'); setSidebarOpen(false); }}
+                    >
+                        <Building2 size={16} />
+                        <span>部门管理</span>
+                        <span className="nav-badge">5</span>
+                    </button>
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/meeting' ? 'active' : ''}`}
+                        onClick={() => { router.push('/meeting'); setSidebarOpen(false); }}
+                    >
+                        <MessageSquare size={16} />
+                        <span>AI 会议室</span>
+                    </button>
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/workspace' ? 'active' : ''}`}
+                        onClick={() => { router.push('/workspace'); setSidebarOpen(false); }}
+                    >
+                        <Sparkles size={16} />
+                        <span>创作工作区</span>
+                    </button>
+                </div>
 
                 {/* History Section — expanded, takes most space */}
                 <div className="sidebar-history sidebar-history-expanded">
