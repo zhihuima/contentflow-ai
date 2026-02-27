@@ -1,8 +1,10 @@
 // ============================================================
 // XHS 自动配图 API Route — 使用 Gemini AI 绘图
+// 支持 8 套高密度信息大图风格（来自 AJ Skills Prompts）
 // ============================================================
 import { NextRequest, NextResponse } from 'next/server';
 import { generateSlideImage } from '@/lib/gemini-image';
+import { recommendStyle, getStyleById } from '@/lib/image-styles';
 import { sanitizeError } from '@/lib/sanitize-error';
 import type { XhsSlide } from '@/lib/types';
 
@@ -10,13 +12,28 @@ export const maxDuration = 120; // Gemini 生成图片需要较长时间
 
 export async function POST(request: NextRequest) {
     try {
-        const { slides, topic } = await request.json() as {
+        const { slides, topic, styleId } = await request.json() as {
             slides: XhsSlide[];
             topic?: string;
+            styleId?: string;  // 可选风格 ID
         };
 
         if (!slides || !Array.isArray(slides)) {
             return NextResponse.json({ error: '缺少图文卡片数据' }, { status: 400 });
+        }
+
+        // 确定使用的风格
+        let activeStyleId = styleId;
+        if (!activeStyleId && topic) {
+            // 自动根据内容主题推荐风格
+            const recommended = recommendStyle(topic, 'xhs');
+            activeStyleId = recommended.id;
+            console.log(`[AI Image] Auto-recommended style: ${recommended.name} (${recommended.id})`);
+        }
+
+        const activeStyle = activeStyleId ? getStyleById(activeStyleId) : null;
+        if (activeStyle) {
+            console.log(`[AI Image] Using style: ${activeStyle.name}`);
         }
 
         const slidesWithImages: XhsSlide[] = [];
@@ -40,12 +57,13 @@ export async function POST(request: NextRequest) {
 
             console.log(`[AI Image] Generating for slide ${i + 1}/${slides.length}: "${keywords.join(', ')}"`);
 
-            // 使用 Gemini 生成图片
+            // 使用 Gemini 生成图片（传入风格 ID）
             const result = await generateSlideImage(
                 keywords,
                 context,
                 i,
                 slides.length,
+                activeStyleId,
             );
 
             if (result) {
@@ -77,6 +95,7 @@ export async function POST(request: NextRequest) {
             data: {
                 slides: slidesWithImages,
                 images,
+                styleUsed: activeStyle ? { id: activeStyle.id, name: activeStyle.name } : null,
             },
         });
     } catch (err: unknown) {
@@ -84,3 +103,4 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
     }
 }
+

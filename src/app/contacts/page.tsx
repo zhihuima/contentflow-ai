@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { DEPARTMENTS, getAllAgents, getAgent } from '@/lib/departments';
 import type { AgentProfile } from '@/lib/departments';
+import { userGetItem, userSetItem } from '@/lib/user-storage';
 
 // ---- 部门颜色 ----
 const DEPT_COLORS: Record<string, string> = {
@@ -45,14 +46,14 @@ const SESSIONS_KEY = 'ai_chat_sessions';
 function loadSessions(): ChatSession[] {
     if (typeof window === 'undefined') return [];
     try {
-        const saved = localStorage.getItem(SESSIONS_KEY);
+        const saved = userGetItem(SESSIONS_KEY);
         return saved ? JSON.parse(saved) : [];
     } catch { return []; }
 }
 
 function saveSessions(sessions: ChatSession[]) {
     try {
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions.slice(0, 50)));
+        userSetItem(SESSIONS_KEY, JSON.stringify(sessions.slice(0, 50)));
     } catch { /* ignore */ }
 }
 

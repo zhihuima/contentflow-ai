@@ -90,20 +90,46 @@ export async function generateImage(
  * @param slideContext 卡片内容（标题、正文等）
  * @param slideIndex 当前卡片序号
  * @param totalSlides 总卡片数
+ * @param styleId 可选风格ID（来自 image-styles.ts 的 8 套高密度信息图风格）
  */
 export async function generateSlideImage(
     keywords: string[],
     slideContext?: string,
     slideIndex?: number,
     totalSlides?: number,
+    styleId?: string,
 ): Promise<GeneratedImage | null> {
-    // 构建精细化提示词
     const keywordStr = keywords.join(', ');
     const slideInfo = slideIndex !== undefined && totalSlides !== undefined
         ? `This is slide ${slideIndex + 1} of ${totalSlides} in a series.`
         : '';
 
-    const prompt = `Create a beautiful, modern, high-quality illustration for a Xiaohongshu (Little Red Book) social media post card.
+    let prompt: string;
+
+    // 尝试使用指定风格或自动推荐
+    if (styleId) {
+        const { getStyleById } = await import('@/lib/image-styles');
+        const style = getStyleById(styleId);
+        if (style) {
+            prompt = `${style.promptTemplate}
+
+Content theme and keywords: ${keywordStr}
+${slideContext ? `Content context: ${slideContext}` : ''}
+${slideInfo}
+
+Additional requirements:
+- No text or watermarks in the image
+- High information density with 6-7 visual modules
+- Professional quality suitable for social media
+- Portrait orientation (3:4 ratio)
+- Use the exact color palette specified above`;
+
+            return generateImage(prompt, '3:4');
+        }
+    }
+
+    // 默认提示词（原始风格）
+    prompt = `Create a beautiful, modern, high-quality illustration for a Xiaohongshu (Little Red Book) social media post card.
 
 Theme and keywords: ${keywordStr}
 ${slideContext ? `Content context: ${slideContext}` : ''}
@@ -120,3 +146,4 @@ Requirements:
     // XHS 卡片使用 3:4 竖版比例
     return generateImage(prompt, '3:4');
 }
+

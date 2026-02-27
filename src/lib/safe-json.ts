@@ -1,10 +1,11 @@
 // ============================================================
-// JSON 安全解析工具
+// JSON 安全解析工具 (v2 — 更强健)
 // Claude 返回的 JSON 可能包含：
 //   1. 尾部逗号 (trailing commas)
-//   2. 未转义的换行符
+//   2. 未转义的换行符 / 控制字符
 //   3. 被 markdown 代码块包裹
 //   4. 前后有多余文本
+//   5. 长文本中的特殊Unicode字符
 // 本工具自动清理这些问题后再解析
 // ============================================================
 
@@ -12,8 +13,11 @@
  * 从可能包含额外文本的 Claude 响应中提取 JSON 对象
  */
 export function extractJSON(raw: string): string {
-    // 1. 去除 markdown 代码块包裹
-    let cleaned = raw.replace(/```(?:json)?\s*/g, '').replace(/```\s*$/g, '');
+    // 1. 去除 markdown 代码块包裹（支持多种格式）
+    let cleaned = raw
+        .replace(/```(?:json|JSON)?\s*\n?/g, '')
+        .replace(/\n?\s*```\s*$/g, '')
+        .trim();
 
     // 2. 尝试找到 JSON 对象或数组
     const objMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -44,13 +48,56 @@ function sanitizeJSON(jsonStr: string): string {
     s = s.replace(/[\u201c\u201d]/g, '"');
     s = s.replace(/[\u2018\u2019]/g, "'");
 
-    // 修复字符串值内的未转义换行符（保留 JSON 结构的换行）
-    // 匹配引号内的内容，替换其中的真实换行为 \n
-    s = s.replace(/"([^"]*?)"/g, (match) => {
-        return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-    });
+    // 移除零宽字符和不可见控制字符（保留 \n \r \t）
+    s = s.replace(/[\u200B-\u200F\u2028\u2029\uFEFF]/g, '');
 
     return s;
+}
+
+/**
+ * 逐字符扫描修复 JSON 字符串值中的无效控制字符
+ * 比正则更可靠，能正确处理转义引号
+ */
+function fixControlCharsInStrings(jsonStr: string): string {
+    const chars: string[] = [];
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < jsonStr.length; i++) {
+        const ch = jsonStr[i];
+
+        if (escaped) {
+            chars.push(ch);
+            escaped = false;
+            continue;
+        }
+
+        if (ch === '\\' && inString) {
+            chars.push(ch);
+            escaped = true;
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = !inString;
+            chars.push(ch);
+            continue;
+        }
+
+        if (inString) {
+            // 替换真实换行/回车/制表符为转义形式
+            if (ch === '\n') { chars.push('\\n'); continue; }
+            if (ch === '\r') { chars.push('\\r'); continue; }
+            if (ch === '\t') { chars.push('\\t'); continue; }
+            // 移除其他控制字符
+            const code = ch.charCodeAt(0);
+            if (code < 0x20) { continue; }
+        }
+
+        chars.push(ch);
+    }
+
+    return chars.join('');
 }
 
 /**
@@ -69,14 +116,33 @@ export function safeParseJSON<T>(raw: string, fallbackLabel = 'response'): T {
         // 继续清理
     }
 
-    // 第二次尝试：清理后解析
+    // 第二次尝试：基本清理后解析
     const sanitized = sanitizeJSON(extracted);
     try {
         return JSON.parse(sanitized) as T;
+    } catch {
+        // 继续深度清理
+    }
+
+    // 第三次尝试：逐字符修复控制字符
+    const fixed = fixControlCharsInStrings(sanitized);
+    try {
+        return JSON.parse(fixed) as T;
+    } catch {
+        // 继续更激进的修复
+    }
+
+    // 第四次尝试：移除所有不在引号外的换行，然后重试
+    const aggressive = sanitized
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/\t/g, '\\t');
+    try {
+        return JSON.parse(aggressive) as T;
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[safeParseJSON] Failed to parse ${fallbackLabel}:`, msg);
-        console.error('[safeParseJSON] Raw text (first 500 chars):', raw.slice(0, 500));
+        console.error('[safeParseJSON] Raw text (first 800 chars):', raw.slice(0, 800));
         throw new Error(`Failed to parse ${fallbackLabel}: ${msg}`);
     }
 }

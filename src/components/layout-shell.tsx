@@ -2,7 +2,8 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks, Phone, Film, Shield, Zap } from 'lucide-react';
+import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, MessageCircle, Sparkles, ListChecks, Phone, Film, Shield, Zap } from 'lucide-react';
+import { initUserStorage, userGetItem, userSetItem, userGetJSON, userRemoveItem } from '@/lib/user-storage';
 
 interface NavItem {
     key: string;
@@ -40,6 +41,7 @@ interface RunningTask {
 
 const RESULT_HISTORY_KEY = 'workflow_result_history';
 const RUNNING_TASK_KEY = 'workflow_running_task';
+const FAV_KEY = 'workflow_favorites';
 
 const MODE_LABELS: Record<string, string> = {
     video: '视频号',
@@ -62,6 +64,8 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
     const fetchUser = useCallback(async () => {
         try {
+            // Initialize user-scoped storage (fetches user + migrates old data)
+            await initUserStorage();
             const res = await fetch('/api/auth/me');
             if (res.ok) {
                 const data = await res.json();
@@ -73,15 +77,15 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         }
     }, []);
 
-    // Load history from localStorage
+    // Load history from user-scoped localStorage
     const loadHistory = useCallback(() => {
         try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
+            const stored = userGetItem(RESULT_HISTORY_KEY);
             if (stored) {
                 const entries = JSON.parse(stored) as { id: string; title: string; mode: string; createdAt: number }[];
                 setHistoryList(entries.map(e => ({
                     id: e.id,
-                    title: e.title.replace(/^\[.*?\]\s*/, ''), // Remove mode prefix like [视频号]
+                    title: e.title.replace(/^\[.*?\]\s*/, ''),
                     mode: e.mode,
                     createdAt: e.createdAt,
                 })));
@@ -89,10 +93,10 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
         } catch { /* ignore */ }
     }, []);
 
-    // Load running task from localStorage
+    // Load running task from user-scoped localStorage
     const loadRunningTask = useCallback(() => {
         try {
-            const stored = localStorage.getItem(RUNNING_TASK_KEY);
+            const stored = userGetItem(RUNNING_TASK_KEY);
             if (stored) {
                 const task = JSON.parse(stored);
                 setRunningTask({
@@ -159,10 +163,10 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     // History item actions
     const deleteHistoryItem = (id: string) => {
         try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
+            const stored = userGetItem(RESULT_HISTORY_KEY);
             if (stored) {
                 const entries = JSON.parse(stored).filter((e: { id: string }) => e.id !== id);
-                localStorage.setItem(RESULT_HISTORY_KEY, JSON.stringify(entries));
+                userSetItem(RESULT_HISTORY_KEY, JSON.stringify(entries));
                 loadHistory();
                 window.dispatchEvent(new CustomEvent('resultHistoryUpdated'));
             }
@@ -172,7 +176,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
     const shareHistoryItem = (entry: HistoryEntry) => {
         try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
+            const stored = userGetItem(RESULT_HISTORY_KEY);
             if (stored) {
                 const full = JSON.parse(stored).find((e: { id: string }) => e.id === entry.id);
                 const text = full?.summary
@@ -195,12 +199,12 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
     const commitRename = (id: string) => {
         if (!renameValue.trim()) { setRenamingId(null); return; }
         try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
+            const stored = userGetItem(RESULT_HISTORY_KEY);
             if (stored) {
                 const entries = JSON.parse(stored).map((e: { id: string; title: string }) =>
                     e.id === id ? { ...e, title: renameValue.trim() } : e
                 );
-                localStorage.setItem(RESULT_HISTORY_KEY, JSON.stringify(entries));
+                userSetItem(RESULT_HISTORY_KEY, JSON.stringify(entries));
                 loadHistory();
                 window.dispatchEvent(new CustomEvent('resultHistoryUpdated'));
             }
@@ -210,14 +214,13 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
     const toggleFavorite = (entry: HistoryEntry) => {
         try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
-            const favKey = 'workflow_favorites';
-            const favs: string[] = JSON.parse(localStorage.getItem(favKey) || '[]');
+            userGetItem(RESULT_HISTORY_KEY);
+            const favs: string[] = userGetJSON<string[]>(FAV_KEY, []);
             if (favs.includes(entry.id)) {
-                localStorage.setItem(favKey, JSON.stringify(favs.filter(f => f !== entry.id)));
+                userSetItem(FAV_KEY, JSON.stringify(favs.filter(f => f !== entry.id)));
                 showToast('已取消收藏');
             } else {
-                localStorage.setItem(favKey, JSON.stringify([...favs, entry.id]));
+                userSetItem(FAV_KEY, JSON.stringify([...favs, entry.id]));
                 showToast('已收藏');
             }
         } catch { /* ignore */ }
@@ -307,6 +310,13 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                     >
                         <Phone size={16} />
                         <span>AI 通讯录</span>
+                    </button>
+                    <button
+                        className={`sidebar-nav-link ${pathname === '/chat' ? 'active' : ''}`}
+                        onClick={() => { router.push('/chat'); setSidebarOpen(false); }}
+                    >
+                        <MessageCircle size={16} />
+                        <span>消息</span>
                     </button>
                     <button
                         className={`sidebar-nav-link ${pathname === '/video-gen' ? 'active' : ''}`}

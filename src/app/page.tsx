@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, ReactNode } from 'react';
 import { Music, Video, BookOpen, Sparkles, Hand, ArrowRight, Bot, BarChart3, Palette, Zap } from 'lucide-react';
+import { userGetItem, initUserStorage } from '@/lib/user-storage';
 
 const RESULT_HISTORY_KEY = 'workflow_result_history';
 
@@ -67,19 +68,21 @@ export default function HomePage() {
         else if (hour < 18) setGreeting('下午好');
         else setGreeting('晚上好');
 
-        // Load user
-        fetch('/api/auth/me').then(r => r.json()).then(d => {
-            if (d.user?.name) setUserName(d.user.name);
-        }).catch(() => { });
+        // Load user + init user storage
+        initUserStorage().then(() => {
+            fetch('/api/auth/me').then(r => r.json()).then(d => {
+                if (d.user?.name) setUserName(d.user.name);
+            }).catch(() => { });
 
-        // Load recent history
-        try {
-            const stored = localStorage.getItem(RESULT_HISTORY_KEY);
-            if (stored) {
-                const entries = JSON.parse(stored);
-                setRecentHistory(entries.slice(0, 6));
-            }
-        } catch { /* ignore */ }
+            // Load recent history (user-scoped)
+            try {
+                const stored = userGetItem(RESULT_HISTORY_KEY);
+                if (stored) {
+                    const entries = JSON.parse(stored);
+                    setRecentHistory(entries.slice(0, 6));
+                }
+            } catch { /* ignore */ }
+        });
     }, []);
 
     const handleModeClick = (mode: string) => {

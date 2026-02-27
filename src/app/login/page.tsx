@@ -1,13 +1,11 @@
 'use client';
 import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const router = useRouter();
 
     async function onSubmit(e: FormEvent) {
         e.preventDefault();
@@ -26,8 +24,10 @@ export default function LoginPage() {
             });
 
             if (res.ok) {
-                router.push('/');
-                router.refresh();
+                // Use full page reload instead of client-side navigation
+                // to ensure the server sees the new auth cookie and serves
+                // a properly rendered page (avoids hydration errors)
+                window.location.href = '/';
             } else {
                 const data = await res.json().catch(() => ({}));
                 setError(data.error || '用户名或密码错误');

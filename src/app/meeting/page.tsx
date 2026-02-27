@@ -11,6 +11,7 @@ import { DEPARTMENTS, getAllAgents, getAgent } from '@/lib/departments';
 import type { AgentProfile, Department } from '@/lib/departments';
 import type { MeetingMessage } from '@/lib/meeting-types';
 import type { MeetingYieldEvent } from '@/lib/meeting-engine';
+import { userGetItem, userSetItem } from '@/lib/user-storage';
 
 // ---- 会议历史 ----
 interface MeetingRecord {
@@ -27,7 +28,7 @@ const MEETING_HISTORY_KEY = 'ai_meeting_history';
 function loadMeetingHistory(): MeetingRecord[] {
     if (typeof window === 'undefined') return [];
     try {
-        const saved = localStorage.getItem(MEETING_HISTORY_KEY);
+        const saved = userGetItem(MEETING_HISTORY_KEY);
         return saved ? JSON.parse(saved) : [];
     } catch { return []; }
 }
@@ -36,8 +37,7 @@ function saveMeetingRecord(record: MeetingRecord) {
     try {
         const history = loadMeetingHistory();
         history.unshift(record);
-        // 最多保存 20 条
-        localStorage.setItem(MEETING_HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
+        userSetItem(MEETING_HISTORY_KEY, JSON.stringify(history.slice(0, 20)));
     } catch { /* ignore */ }
 }
 

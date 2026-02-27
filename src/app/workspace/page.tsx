@@ -1,5 +1,6 @@
 'use client';
 import { Share2, Star, Paperclip, Send, Settings, Check, X, Zap, Lightbulb, ChevronDown, ChevronRight, ArrowRight } from 'lucide-react';
+import { userGetItem, userSetItem, userRemoveItem, userGetJSON, initUserStorage } from '@/lib/user-storage';
 
 import { useState, useCallback, useRef, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -200,17 +201,42 @@ function WorkspaceInner() {
     const [advReferenceLinks, setAdvReferenceLinks] = useState('');
     const [advPersonalStyle, setAdvPersonalStyle] = useState('');
 
-    // Load history from localStorage on mount
+    // Load history from user-scoped localStorage on mount
     useEffect(() => {
-        try {
-            const saved = localStorage.getItem('workflow_history');
-            if (saved) setHistory(JSON.parse(saved));
-        } catch { /* ignore */ }
-        try {
-            const savedResults = localStorage.getItem(RESULT_HISTORY_KEY);
-            if (savedResults) setResultHistory(JSON.parse(savedResults));
-        } catch { /* ignore */ }
+        const init = async () => {
+            await initUserStorage();
+            try {
+                const saved = userGetItem('workflow_history');
+                if (saved) setHistory(JSON.parse(saved));
+            } catch { /* ignore */ }
+            try {
+                const savedResults = userGetItem(RESULT_HISTORY_KEY);
+                if (savedResults) setResultHistory(JSON.parse(savedResults));
+            } catch { /* ignore */ }
+        };
+        init();
     }, []);
+
+    // Import pseudo-original content from breakdown page
+    useEffect(() => {
+        const importType = searchParams.get('import');
+        if (importType === 'pseudo-original') {
+            try {
+                const stored = sessionStorage.getItem('pseudo_original_import');
+                if (stored) {
+                    const data = JSON.parse(stored);
+                    if (data.content) {
+                        setState(prev => ({
+                            ...prev,
+                            userInput: `【伪原创导入 - 来源: ${data.sourceUrl || '爆款拆解'}】\n\n请基于以下内容进行进一步优化和编辑：\n\n${data.content}`,
+                        }));
+                        // Clear the sessionStorage after import
+                        sessionStorage.removeItem('pseudo_original_import');
+                    }
+                }
+            } catch { /* ignore */ }
+        }
+    }, [searchParams]);
 
     // Auto-scroll to bottom when new content appears (ChatGPT-style)
     useEffect(() => {
@@ -264,7 +290,7 @@ function WorkspaceInner() {
         setResultHistory(prev => {
             const updated = [entry, ...prev].slice(0, MAX_RESULT_HISTORY);
             try {
-                localStorage.setItem(RESULT_HISTORY_KEY, JSON.stringify(updated));
+                userSetItem(RESULT_HISTORY_KEY, JSON.stringify(updated));
                 window.dispatchEvent(new CustomEvent('resultHistoryUpdated'));
             } catch { /* ignore */ }
             return updated;
@@ -288,13 +314,13 @@ function WorkspaceInner() {
                 createdAt: Date.now(),
             };
             try {
-                localStorage.setItem(RUNNING_TASK_KEY, JSON.stringify(runningTask));
+                userSetItem(RUNNING_TASK_KEY, JSON.stringify(runningTask));
                 window.dispatchEvent(new CustomEvent('runningTaskUpdated'));
             } catch { /* ignore */ }
         } else {
             // Task is idle or done — clear running task
             try {
-                localStorage.removeItem(RUNNING_TASK_KEY);
+                userRemoveItem(RUNNING_TASK_KEY);
                 window.dispatchEvent(new CustomEvent('runningTaskUpdated'));
             } catch { /* ignore */ }
         }
@@ -303,14 +329,13 @@ function WorkspaceInner() {
     // On mount: restore running task if saved from previous navigation
     useEffect(() => {
         try {
-            const saved = localStorage.getItem(RUNNING_TASK_KEY);
+            const saved = userGetItem(RUNNING_TASK_KEY);
             if (saved) {
                 const task = JSON.parse(saved);
                 if (task?.state) {
                     setState(task.state);
                     if (task.logs) setWorkflowLogs(task.logs);
-                    // Clear the saved running task since we've restored it
-                    localStorage.removeItem(RUNNING_TASK_KEY);
+                    userRemoveItem(RUNNING_TASK_KEY);
                     window.dispatchEvent(new CustomEvent('runningTaskUpdated'));
                 }
             }
@@ -336,7 +361,7 @@ function WorkspaceInner() {
                 // Read from localStorage directly to avoid stale closure
                 let entries: ResultHistoryEntry[] = resultHistory;
                 try {
-                    const stored = localStorage.getItem(RESULT_HISTORY_KEY);
+                    const stored = userGetItem(RESULT_HISTORY_KEY);
                     if (stored) entries = JSON.parse(stored);
                 } catch { /* use state fallback */ }
                 const entry = entries.find(r => r.id === detail.id);
@@ -370,18 +395,18 @@ function WorkspaceInner() {
         };
         const updated = [entry, ...history.filter(h => h.text !== trimmed)].slice(0, 20);
         setHistory(updated);
-        try { localStorage.setItem('workflow_history', JSON.stringify(updated)); } catch { /* ignore */ }
+        try { userSetItem('workflow_history', JSON.stringify(updated)); } catch { /* ignore */ }
     };
 
     const deleteHistory = (index: number) => {
         const updated = history.filter((_, i) => i !== index);
         setHistory(updated);
-        try { localStorage.setItem('workflow_history', JSON.stringify(updated)); } catch { /* ignore */ }
+        try { userSetItem('workflow_history', JSON.stringify(updated)); } catch { /* ignore */ }
     };
 
     const clearAllHistory = () => {
         setHistory([]);
-        try { localStorage.removeItem('workflow_history'); } catch { /* ignore */ }
+        try { userRemoveItem('workflow_history'); } catch { /* ignore */ }
     };
 
     const addLog = (agent: string, message: string, status: 'running' | 'done' | 'info' = 'running', reasoning?: string) => {
@@ -406,38 +431,92 @@ function WorkspaceInner() {
         showToast('已复制到剪贴板');
     };
 
-    const shareResult = () => {
+    const shareResult = async () => {
         const modeLabels: Record<string, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号', moments: '朋友圈' };
-        let text = `【${modeLabels[state.mode]}】${state.userInput.slice(0, 50)}\n\n`;
+        let content = '';
+        let title = state.userInput.slice(0, 50);
+        let score: number | null = null;
+
         if (state.mode === 'polish' && state.polishResult) {
-            text += state.polishResult.polished || '';
+            content = state.polishResult.polished || '';
+            score = state.polishResult.score?.after ?? null;
         } else if (state.mode === 'xhs' && state.xhsReview?.final_note) {
             const note = state.xhsReview.final_note;
-            text += (note.titles?.[0] || '') + '\n\n' + (note.caption || '');
+            content = (note.titles?.[0] || '') + '\n\n' + (note.caption || '');
+            title = state.parsedRequirement?.topic || title;
+            score = state.xhsReview.overall_score;
         } else if (state.mode === 'imitate' && state.imitateResult) {
-            text += (state.imitateResult.titles?.[0] || '') + '\n\n' + (state.imitateResult.content || '');
+            content = (state.imitateResult.titles?.[0] || '') + '\n\n' + (state.imitateResult.content || '');
+            title = state.imitateResult.original_title || title;
+            score = state.imitateResult.originality_score;
         } else {
             const script = state.qualityReview?.final_script || state.script;
-            text += script?.full_narration || '';
+            content = script?.full_narration || '';
+            title = state.parsedRequirement?.topic || title;
+            score = state.qualityReview?.overall_score ?? null;
         }
-        navigator.clipboard.writeText(text).then(() => showToast('内容已复制，可分享给好友'));
+
+        if (!content) {
+            // Fallback: just copy text
+            navigator.clipboard.writeText(`【${modeLabels[state.mode]}】${title}\n\n${content}`);
+            showToast('内容已复制');
+            return;
+        }
+
+        try {
+            // Get current user info
+            let userName = '创作者';
+            let userId = '';
+            try {
+                const meRes = await fetch('/api/auth/me');
+                if (meRes.ok) {
+                    const meData = await meRes.json();
+                    userName = meData.user?.name || meData.user?.username || '创作者';
+                    userId = meData.user?.id || '';
+                }
+            } catch { /* ignore */ }
+
+            const res = await fetch('/api/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId,
+                    userName,
+                    mode: state.mode,
+                    title: `[${modeLabels[state.mode]}] ${title}`,
+                    content,
+                    score,
+                }),
+            });
+            const data = await res.json();
+            if (data.ok && data.shareUrl) {
+                const fullUrl = `${window.location.origin}${data.shareUrl}`;
+                await navigator.clipboard.writeText(fullUrl);
+                showToast('分享链接已复制到剪贴板');
+            } else {
+                // Fallback
+                navigator.clipboard.writeText(`【${modeLabels[state.mode]}】${title}\n\n${content}`);
+                showToast('内容已复制（分享链接生成失败）');
+            }
+        } catch {
+            navigator.clipboard.writeText(`【${modeLabels[state.mode]}】${title}\n\n${content}`);
+            showToast('内容已复制');
+        }
     };
 
     const toggleResultFavorite = () => {
         try {
-            const favKey = 'workflow_favorites';
-            const historyKey = 'workflow_result_history';
-            const stored = localStorage.getItem(historyKey);
+            const stored = userGetItem(RESULT_HISTORY_KEY);
             if (!stored) return;
             const entries = JSON.parse(stored);
-            const latest = entries[0]; // Most recent entry
+            const latest = entries[0];
             if (!latest) return;
-            const favs: string[] = JSON.parse(localStorage.getItem(favKey) || '[]');
+            const favs: string[] = userGetJSON<string[]>('workflow_favorites', []);
             if (favs.includes(latest.id)) {
-                localStorage.setItem(favKey, JSON.stringify(favs.filter((f: string) => f !== latest.id)));
+                userSetItem('workflow_favorites', JSON.stringify(favs.filter((f: string) => f !== latest.id)));
                 showToast('已取消收藏');
             } else {
-                localStorage.setItem(favKey, JSON.stringify([...favs, latest.id]));
+                userSetItem('workflow_favorites', JSON.stringify([...favs, latest.id]));
                 showToast('已收藏到个人中心');
             }
         } catch { /* ignore */ }
@@ -530,14 +609,14 @@ function WorkspaceInner() {
     const deleteResultHistory = (id: string) => {
         setResultHistory(prev => {
             const updated = prev.filter(e => e.id !== id);
-            try { localStorage.setItem(RESULT_HISTORY_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
+            try { userSetItem(RESULT_HISTORY_KEY, JSON.stringify(updated)); } catch { /* ignore */ }
             return updated;
         });
     };
 
     const clearAllResultHistory = () => {
         setResultHistory([]);
-        try { localStorage.removeItem(RESULT_HISTORY_KEY); } catch { /* ignore */ }
+        try { userRemoveItem(RESULT_HISTORY_KEY); } catch { /* ignore */ }
     };
 
     /* ---- Multi-Agent SSE Handler ---- */
