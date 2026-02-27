@@ -3,6 +3,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -10,8 +11,8 @@ export default function LoginPage() {
 
     async function onSubmit(e: FormEvent) {
         e.preventDefault();
-        if (!password.trim()) {
-            setError('请输入密码');
+        if (!username.trim() || !password.trim()) {
+            setError('请输入用户名和密码');
             return;
         }
         setLoading(true);
@@ -21,14 +22,15 @@ export default function LoginPage() {
             const res = await fetch('/api/auth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: password.trim() }),
+                body: JSON.stringify({ username: username.trim(), password: password.trim() }),
             });
 
             if (res.ok) {
                 router.push('/');
                 router.refresh();
             } else {
-                setError('密码错误，请重试');
+                const data = await res.json().catch(() => ({}));
+                setError(data.error || '用户名或密码错误');
                 setLoading(false);
             }
         } catch {
@@ -40,7 +42,6 @@ export default function LoginPage() {
     return (
         <>
             <style>{`
-                /* 登录页独立样式 — 覆盖全局 */
                 .login-wrap {
                     min-height: 100vh;
                     display: flex;
@@ -80,22 +81,26 @@ export default function LoginPage() {
                     margin-bottom: 24px;
                 }
                 .login-badge .dot {
-                    width: 7px;
-                    height: 7px;
-                    border-radius: 50%;
-                    background: #22c55e;
-                    display: inline-block;
+                    width: 7px; height: 7px; border-radius: 50%;
+                    background: #22c55e; display: inline-block;
                 }
                 .login-card h1 {
-                    font-size: 1.5rem;
-                    font-weight: 800;
-                    color: #1e293b;
-                    margin: 0 0 8px;
+                    font-size: 1.5rem; font-weight: 800;
+                    color: #1e293b; margin: 0 0 8px;
                 }
                 .login-card p.sub {
-                    font-size: 0.85rem;
-                    color: #64748b;
-                    margin: 0 0 28px;
+                    font-size: 0.85rem; color: #64748b; margin: 0 0 28px;
+                }
+                .login-field {
+                    margin-bottom: 14px;
+                    text-align: left;
+                }
+                .login-label {
+                    display: block;
+                    font-size: 0.78rem;
+                    font-weight: 600;
+                    color: #475569;
+                    margin-bottom: 6px;
                 }
                 .login-input {
                     width: 100%;
@@ -113,43 +118,28 @@ export default function LoginPage() {
                     border-color: #818cf8;
                     box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
                 }
-                .login-input::placeholder {
-                    color: #94a3b8;
-                }
+                .login-input::placeholder { color: #94a3b8; }
                 .login-error {
-                    color: #ef4444;
-                    font-size: 0.8rem;
-                    margin: 10px 0 0;
+                    color: #ef4444; font-size: 0.8rem; margin: 10px 0 0;
                 }
                 .login-btn {
-                    display: block;
-                    width: 100%;
-                    margin-top: 20px;
-                    padding: 14px 0;
-                    font-size: 1rem;
-                    font-weight: 700;
+                    display: block; width: 100%; margin-top: 20px;
+                    padding: 14px 0; font-size: 1rem; font-weight: 700;
                     color: #fff !important;
                     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
-                    border: none !important;
-                    border-radius: 12px;
-                    cursor: pointer;
-                    position: relative;
-                    z-index: 30;
+                    border: none !important; border-radius: 12px;
+                    cursor: pointer; position: relative; z-index: 30;
                     box-shadow: 0 4px 14px rgba(99,102,241,0.3);
                     transition: transform 0.15s, box-shadow 0.15s;
-                    pointer-events: auto !important;
-                    opacity: 1 !important;
+                    pointer-events: auto !important; opacity: 1 !important;
                 }
                 .login-btn:hover {
                     transform: translateY(-1px);
                     box-shadow: 0 6px 20px rgba(99,102,241,0.4);
                 }
-                .login-btn:active {
-                    transform: translateY(0);
-                }
+                .login-btn:active { transform: translateY(0); }
                 .login-btn.is-loading {
-                    opacity: 0.7 !important;
-                    cursor: wait;
+                    opacity: 0.7 !important; cursor: wait;
                 }
             `}</style>
 
@@ -157,29 +147,45 @@ export default function LoginPage() {
                 <div className="login-card">
                     <div className="login-badge">
                         <span className="dot" />
-                        WORKFLOW AGENT V2.0
+                        CONTENTFLOW AI
                     </div>
 
-                    <h1>访问验证</h1>
-                    <p className="sub">请输入访问密码以继续</p>
+                    <h1>账号登录</h1>
+                    <p className="sub">请输入您的账号和密码</p>
 
                     <form onSubmit={onSubmit}>
-                        <input
-                            className="login-input"
-                            type="password"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                            placeholder="请输入密码"
-                            autoFocus
-                        />
+                        <div className="login-field">
+                            <label className="login-label">用户名</label>
+                            <input
+                                className="login-input"
+                                type="text"
+                                value={username}
+                                onChange={e => setUsername(e.target.value)}
+                                placeholder="请输入用户名"
+                                autoFocus
+                                autoComplete="username"
+                            />
+                        </div>
+                        <div className="login-field">
+                            <label className="login-label">密码</label>
+                            <input
+                                className="login-input"
+                                type="password"
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="请输入密码"
+                                autoComplete="current-password"
+                            />
+                        </div>
 
                         {error && <p className="login-error">{error}</p>}
 
                         <button
                             type="submit"
                             className={`login-btn${loading ? ' is-loading' : ''}`}
+                            disabled={loading}
                         >
-                            {loading ? '验证中...' : '进入系统'}
+                            {loading ? '登录中...' : '登 录'}
                         </button>
                     </form>
                 </div>

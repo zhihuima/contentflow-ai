@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks, Phone, Film } from 'lucide-react';
+import { User, Pencil, Share2, Star, Trash2, X, Menu, Building2, MessageSquare, Sparkles, ListChecks, Phone, Film, Shield } from 'lucide-react';
 
 interface NavItem {
     key: string;
@@ -329,6 +329,15 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
                         <Sparkles size={16} />
                         <span>创作工作区</span>
                     </button>
+                    {user?.role === 'admin' && (
+                        <button
+                            className={`sidebar-nav-link ${pathname === '/admin' ? 'active' : ''}`}
+                            onClick={() => { router.push('/admin'); setSidebarOpen(false); }}
+                        >
+                            <Shield size={16} />
+                            <span>管理后台</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* History Section — expanded, takes most space */}
