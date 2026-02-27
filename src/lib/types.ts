@@ -210,8 +210,27 @@ export interface WechatArticle {
     };
 }
 
+/** 朋友圈文案 */
+export interface MomentsCopy {
+    text: string;
+    style: string;
+    best_for: string;
+    line_count: number;
+    engagement_prediction: string;
+}
+
+export interface MomentsResult {
+    copies: MomentsCopy[];
+    hashtags: string[];
+    posting_tips?: {
+        best_time?: string;
+        photo_suggestion?: string;
+        interaction_tip?: string;
+    };
+}
+
 /** 创作模式 */
-export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate' | 'wechat';
+export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate' | 'wechat' | 'moments';
 
 /** 工作流状态 */
 export type WorkflowStage = 'idle' | 'parsing' | 'planning' | 'writing' | 'optimizing' | 'reviewing' | 'done' | 'error';
@@ -232,6 +251,7 @@ export interface WorkflowState {
     polishResult: PolishResult | null;
     platformAdvice: PlatformAdvice | null;
     wechatArticle: WechatArticle | null;
+    momentsResult: MomentsResult | null;
     error: string | null;
     streamingText: string;
     imitateResult: import('@/lib/agents/content-imitator').ImitateResult | null;

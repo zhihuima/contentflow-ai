@@ -126,6 +126,7 @@ function initialState(mode: CreationMode = 'video'): WorkflowState {
         polishResult: null,
         platformAdvice: null,
         wechatArticle: null,
+        momentsResult: null,
         error: null,
         streamingText: '',
         imitateResult: null,
@@ -138,7 +139,7 @@ const POLISH_PLATFORMS = ['通用', '视频号', '小红书'];
 function WorkspaceInner() {
     const searchParams = useSearchParams();
     const urlMode = searchParams.get('mode') as CreationMode | null;
-    const validModes: CreationMode[] = ['video', 'xhs', 'douyin', 'polish', 'imitate', 'wechat'];
+    const validModes: CreationMode[] = ['video', 'xhs', 'douyin', 'polish', 'imitate', 'wechat', 'moments'];
     const startMode = (urlMode && validModes.includes(urlMode)) ? urlMode : 'video';
 
     const [state, setState] = useState<WorkflowState>(initialState(startMode));
@@ -225,7 +226,7 @@ function WorkspaceInner() {
     // Auto-save to result history when a task completes
     useEffect(() => {
         if (state.stage !== 'done') return;
-        const modeLabels: Record<CreationMode, string> = { video: '视频号脚本', xhs: '小红书笔记', douyin: '抖音脚本', polish: '内容润色', imitate: '内容模仿', wechat: '公众号文章' };
+        const modeLabels: Record<CreationMode, string> = { video: '视频号脚本', xhs: '小红书笔记', douyin: '抖音脚本', polish: '内容润色', imitate: '内容模仿', wechat: '公众号文章', moments: '朋友圈文案' };
         let title = '';
         let summary = '';
         let score: number | null = null;
@@ -273,7 +274,7 @@ function WorkspaceInner() {
 
     // Sync running task to localStorage so sidebar can show it
     useEffect(() => {
-        const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
+        const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号', moments: '朋友圈' };
         if (state.stage !== 'idle' && state.stage !== 'done') {
             // Task is running — save to localStorage
             const runningTask = {
@@ -406,7 +407,7 @@ function WorkspaceInner() {
     };
 
     const shareResult = () => {
-        const modeLabels: Record<string, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
+        const modeLabels: Record<string, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号', moments: '朋友圈' };
         let text = `【${modeLabels[state.mode]}】${state.userInput.slice(0, 50)}\n\n`;
         if (state.mode === 'polish' && state.polishResult) {
             text += state.polishResult.polished || '';
@@ -466,7 +467,7 @@ function WorkspaceInner() {
     const saveCurrentAndNew = () => {
         // Only save if there is meaningful progress
         if (state.stage !== 'idle') {
-            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
+            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号', moments: '朋友圈' };
             const label = `${modeLabels[state.mode]} - ${state.userInput.slice(0, 20) || '任务'}...`;
             const task: TaskInstance = {
                 id: genTaskId(),
@@ -484,7 +485,7 @@ function WorkspaceInner() {
     const switchToTask = (taskId: string) => {
         // Save current first
         if (state.stage !== 'idle') {
-            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
+            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号', moments: '朋友圈' };
             const label = `${modeLabels[state.mode]} - ${state.userInput.slice(0, 20) || '任务'}...`;
             const updatedCurrent: TaskInstance = {
                 id: activeTaskId || genTaskId(),
@@ -1123,6 +1124,31 @@ function WorkspaceInner() {
         }
     };
 
+    /* ---- Moments copy handler ---- */
+    const handleMoments = async () => {
+        const input = state.userInput.trim();
+        if (!input) return;
+        saveToHistory(input);
+        setShowHistory(false);
+        setWorkflowLogs([]);
+        logIdRef.current = 0;
+        setLogPanelOpen(true);
+        setState(prev => ({ ...prev, stage: 'writing', error: null, momentsResult: null }));
+
+        try {
+            const logWrite = addLog('朋友圈文案', '正在生成多条不同风格的朋友圈文案...', 'running',
+                '【推理逻辑】\n1. 分析主题的朋友圈传播潜力\n2. 生成多条不同风格文案\n3. 控制每条文案长度(3-6行)\n4. 添加话题标签和发布建议');
+
+            const result = await apiCall<{ data: import('@/lib/types').MomentsResult }>('/api/workflow/moments-write', { topic: input });
+
+            updateLog(logWrite, { status: 'done', message: '✅ 朋友圈文案生成完成' });
+            setState(prev => ({ ...prev, stage: 'done', momentsResult: result.data }));
+            showToast('朋友圈文案已生成');
+        } catch (err) {
+            setState(prev => ({ ...prev, stage: 'error', error: err instanceof Error ? err.message : '生成失败' }));
+        }
+    };
+
     /* ============ RENDER ============ */
     return (
         <div className="app-container">
@@ -1130,7 +1156,7 @@ function WorkspaceInner() {
             <div className="workspace-scroll-container" ref={scrollContainerRef}>
 
                 {/* Idle state — centered greeting + suggestions */}
-                {(state.stage === 'idle' || state.stage === 'error') && state.mode !== 'polish' && state.mode !== 'imitate' && state.mode !== 'wechat' && (
+                {(state.stage === 'idle' || state.stage === 'error') && state.mode !== 'polish' && state.mode !== 'imitate' && state.mode !== 'wechat' && state.mode !== 'moments' && (
                     <div className="workspace-greeting">
                         <h1 className="greeting-title">
                             {state.mode === 'xhs' ? '小红书图文创作' : state.mode === 'douyin' ? '抖音脚本创作' : '视频号脚本创作'}
@@ -1163,6 +1189,30 @@ function WorkspaceInner() {
                                 { icon: '🧠', text: 'AI将如何改变每个人的工作方式' },
                                 { icon: '❤️', text: '在北京月薪3万和成都月薪1万，哪个更幸福？' },
                                 { icon: '📚', text: '我花了100万读的MBA，这三条认知最值钱' },
+                            ].map(({ icon, text }) => (
+                                <button
+                                    key={text}
+                                    className="suggestion-chip"
+                                    onClick={() => setState(prev => ({ ...prev, userInput: text }))}
+                                >
+                                    <span style={{ marginRight: 6 }}>{icon}</span> {text}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Moments idle greeting */}
+                {(state.stage === 'idle' || state.stage === 'error') && state.mode === 'moments' && (
+                    <div className="workspace-greeting">
+                        <h1 className="greeting-title">朋友圈文案创作</h1>
+                        <p className="greeting-subtitle">生成多条不同风格的朋友圈文案，长度合适、情绪到位、吸引互动</p>
+                        <div className="greeting-suggestions">
+                            {[
+                                { icon: '☕', text: '周末独处的惬意时光' },
+                                { icon: '💼', text: '今天工作中的一个小感悟' },
+                                { icon: '🌟', text: '推荐一本最近读的好书' },
+                                { icon: '🍳', text: '自己做的一道菜，简单但幸福' },
                             ].map(({ icon, text }) => (
                                 <button
                                     key={text}
@@ -1406,6 +1456,94 @@ function WorkspaceInner() {
                             </button>
                             <button className="btn btn-secondary" onClick={reset}>
                                 新建文章
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Moments result */}
+                {state.mode === 'moments' && state.momentsResult && state.stage === 'done' && (
+                    <div className="section-card">
+                        <div className="section-header">
+                            <div className="section-title">
+                                朋友圈文案生成完成
+                            </div>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                                共 {state.momentsResult.copies?.length || 0} 条文案
+                            </span>
+                        </div>
+
+                        {/* Copy cards */}
+                        {state.momentsResult.copies?.map((copy, i) => (
+                            <div key={i} style={{
+                                background: 'var(--bg-secondary)', borderRadius: 12,
+                                padding: '16px 18px', marginBottom: 12,
+                                border: '1px solid var(--border-light)',
+                                cursor: 'pointer', transition: 'border-color 0.2s',
+                            }} onClick={() => copyText(copy.text)}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <span style={{
+                                            fontSize: '0.7rem', padding: '2px 8px', borderRadius: 8,
+                                            background: 'rgba(99,102,241,0.08)', color: '#6366f1', fontWeight: 600,
+                                        }}>{copy.style}</span>
+                                        <span style={{
+                                            fontSize: '0.7rem', padding: '2px 8px', borderRadius: 8,
+                                            background: 'rgba(245,158,11,0.08)', color: '#d97706', fontWeight: 500,
+                                        }}>{copy.best_for}</span>
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>
+                                        {copy.engagement_prediction || `${copy.line_count || '?'}行`}
+                                    </span>
+                                </div>
+                                <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: '0.92rem', color: 'var(--fg)' }}>
+                                    {copy.text}
+                                </div>
+                                <div style={{ textAlign: 'right', marginTop: 8 }}>
+                                    <button className="btn btn-ghost" style={{ fontSize: '0.75rem' }} onClick={e => { e.stopPropagation(); copyText(copy.text); }}>
+                                        点击复制
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Hashtags */}
+                        {state.momentsResult.hashtags?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--fg)', fontSize: '0.85rem' }}>推荐话题标签</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {state.momentsResult.hashtags.map((tag, i) => (
+                                        <span key={i} className="template-tag" style={{ fontSize: '0.8rem', cursor: 'pointer' }} onClick={() => copyText(tag)}>{tag}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Posting tips */}
+                        {state.momentsResult.posting_tips && (
+                            <div style={{ background: 'linear-gradient(135deg, rgba(34,197,94,0.05), rgba(59,130,246,0.05))', borderRadius: 8, padding: '14px 18px', marginBottom: 16, fontSize: '0.83rem' }}>
+                                <strong>发布建议</strong>
+                                {state.momentsResult.posting_tips.best_time && (
+                                    <div style={{ marginTop: 8 }}>⏰ <strong>最佳时间：</strong>{state.momentsResult.posting_tips.best_time}</div>
+                                )}
+                                {state.momentsResult.posting_tips.photo_suggestion && (
+                                    <div style={{ marginTop: 6 }}>📸 <strong>配图建议：</strong>{state.momentsResult.posting_tips.photo_suggestion}</div>
+                                )}
+                                {state.momentsResult.posting_tips.interaction_tip && (
+                                    <div style={{ marginTop: 6 }}>💬 <strong>互动技巧：</strong>{state.momentsResult.posting_tips.interaction_tip}</div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="final-actions">
+                            <button className="btn btn-primary" onClick={() => copyText(state.momentsResult!.copies?.map(c => c.text).join('\n\n---\n\n') || '')}>
+                                复制全部文案
+                            </button>
+                            <button className="btn btn-secondary" onClick={shareResult} title="分享内容">
+                                <Share2 size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 分享
+                            </button>
+                            <button className="btn btn-secondary" onClick={reset}>
+                                新建文案
                             </button>
                         </div>
                     </div>
@@ -1908,7 +2046,8 @@ function WorkspaceInner() {
                             state.mode === 'polish' ? '粘贴你要润色的内容...' :
                                 state.mode === 'imitate' ? '粘贴链接或要模仿的内容...' :
                                     state.mode === 'wechat' ? '输入公众号文章主题或需求...' :
-                                        '描述你的创作需求...'
+                                        state.mode === 'moments' ? '输入朋友圈文案主题或想表达的内容...' :
+                                            '描述你的创作需求...'
                         }
                         rows={3}
                         onKeyDown={e => {
@@ -1917,6 +2056,7 @@ function WorkspaceInner() {
                                 if (state.mode === 'polish') handlePolish();
                                 else if (state.mode === 'imitate') handleImitate();
                                 else if (state.mode === 'wechat') handleWechat();
+                                else if (state.mode === 'moments') handleMoments();
                                 else handleSubmit();
                             }
                         }}
@@ -1979,6 +2119,7 @@ function WorkspaceInner() {
                                 if (state.mode === 'polish') handlePolish();
                                 else if (state.mode === 'imitate') handleImitate();
                                 else if (state.mode === 'wechat') handleWechat();
+                                else if (state.mode === 'moments') handleMoments();
                                 else handleSubmit();
                             }}
                             disabled={state.mode === 'polish' ? state.userInput.trim().length < 10 : !state.userInput.trim()}
@@ -2082,6 +2223,7 @@ function WorkspaceInner() {
                         ['video', '视频号'],
                         ['xhs', '小红书'],
                         ['wechat', '公众号'],
+                        ['moments', '朋友圈'],
                         ['polish', '润色'],
                         ['imitate', '模仿'],
                     ] as [string, string][]).map(([key, label]) => (
