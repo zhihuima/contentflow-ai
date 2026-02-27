@@ -186,8 +186,32 @@ export interface PlatformAdvice {
     distribution_strategy: string;
 }
 
+/** 公众号文章 */
+export interface WechatArticle {
+    titles: string[];
+    cover_text?: string;
+    abstract?: string;
+    article: string;
+    golden_quotes: string[];
+    seo_keywords: string[];
+    word_count?: number;
+    estimated_read_time?: string;
+    traffic_strategy?: {
+        best_publish_time?: string;
+        title_analysis?: string;
+        viral_hooks?: string[];
+        interaction_design?: string[];
+        algorithm_tips?: string[];
+    };
+    article_structure?: {
+        hook?: string;
+        sections?: string[];
+        cta?: string;
+    };
+}
+
 /** 创作模式 */
-export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate';
+export type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate' | 'wechat';
 
 /** 工作流状态 */
 export type WorkflowStage = 'idle' | 'parsing' | 'planning' | 'writing' | 'optimizing' | 'reviewing' | 'done' | 'error';
@@ -207,6 +231,7 @@ export interface WorkflowState {
     xhsReview: XhsQualityReview | null;
     polishResult: PolishResult | null;
     platformAdvice: PlatformAdvice | null;
+    wechatArticle: WechatArticle | null;
     error: string | null;
     streamingText: string;
     imitateResult: import('@/lib/agents/content-imitator').ImitateResult | null;

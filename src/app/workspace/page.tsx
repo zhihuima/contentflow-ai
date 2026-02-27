@@ -125,6 +125,7 @@ function initialState(mode: CreationMode = 'video'): WorkflowState {
         xhsReview: null,
         polishResult: null,
         platformAdvice: null,
+        wechatArticle: null,
         error: null,
         streamingText: '',
         imitateResult: null,
@@ -137,7 +138,7 @@ const POLISH_PLATFORMS = ['通用', '视频号', '小红书'];
 function WorkspaceInner() {
     const searchParams = useSearchParams();
     const urlMode = searchParams.get('mode') as CreationMode | null;
-    const validModes: CreationMode[] = ['video', 'xhs', 'douyin', 'polish', 'imitate'];
+    const validModes: CreationMode[] = ['video', 'xhs', 'douyin', 'polish', 'imitate', 'wechat'];
     const startMode = (urlMode && validModes.includes(urlMode)) ? urlMode : 'video';
 
     const [state, setState] = useState<WorkflowState>(initialState(startMode));
@@ -224,7 +225,7 @@ function WorkspaceInner() {
     // Auto-save to result history when a task completes
     useEffect(() => {
         if (state.stage !== 'done') return;
-        const modeLabels: Record<CreationMode, string> = { video: '视频号脚本', xhs: '小红书笔记', douyin: '抖音脚本', polish: '内容润色', imitate: '内容模仿' };
+        const modeLabels: Record<CreationMode, string> = { video: '视频号脚本', xhs: '小红书笔记', douyin: '抖音脚本', polish: '内容润色', imitate: '内容模仿', wechat: '公众号文章' };
         let title = '';
         let summary = '';
         let score: number | null = null;
@@ -272,7 +273,7 @@ function WorkspaceInner() {
 
     // Sync running task to localStorage so sidebar can show it
     useEffect(() => {
-        const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿' };
+        const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
         if (state.stage !== 'idle' && state.stage !== 'done') {
             // Task is running — save to localStorage
             const runningTask = {
@@ -405,7 +406,7 @@ function WorkspaceInner() {
     };
 
     const shareResult = () => {
-        const modeLabels: Record<string, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿' };
+        const modeLabels: Record<string, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
         let text = `【${modeLabels[state.mode]}】${state.userInput.slice(0, 50)}\n\n`;
         if (state.mode === 'polish' && state.polishResult) {
             text += state.polishResult.polished || '';
@@ -465,7 +466,7 @@ function WorkspaceInner() {
     const saveCurrentAndNew = () => {
         // Only save if there is meaningful progress
         if (state.stage !== 'idle') {
-            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿' };
+            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
             const label = `${modeLabels[state.mode]} - ${state.userInput.slice(0, 20) || '任务'}...`;
             const task: TaskInstance = {
                 id: genTaskId(),
@@ -483,7 +484,7 @@ function WorkspaceInner() {
     const switchToTask = (taskId: string) => {
         // Save current first
         if (state.stage !== 'idle') {
-            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿' };
+            const modeLabels: Record<CreationMode, string> = { video: '视频号', xhs: '小红书', douyin: '抖音', polish: '润色', imitate: '模仿', wechat: '公众号' };
             const label = `${modeLabels[state.mode]} - ${state.userInput.slice(0, 20) || '任务'}...`;
             const updatedCurrent: TaskInstance = {
                 id: activeTaskId || genTaskId(),
@@ -1097,6 +1098,31 @@ function WorkspaceInner() {
         }
     };
 
+    /* ---- WeChat article handler ---- */
+    const handleWechat = async () => {
+        const input = state.userInput.trim();
+        if (!input) return;
+        saveToHistory(input);
+        setShowHistory(false);
+        setWorkflowLogs([]);
+        logIdRef.current = 0;
+        setLogPanelOpen(true);
+        setState(prev => ({ ...prev, stage: 'writing', error: null, wechatArticle: null }));
+
+        try {
+            const logWrite = addLog('公众号撰写', '正在生成符合流量机制的公众号文章...', 'running',
+                '【推理逻辑】\n1. 分析主题的搜索热度和受众群体\n2. 设计标题策略（推荐流+裂变流+SEO）\n3. 撰写正文（前200字极度抓人）\n4. 提炼金句和传播钩子\n5. 生成流量策略建议');
+
+            const result = await apiCall<{ data: import('@/lib/types').WechatArticle }>('/api/workflow/wechat-write', { topic: input });
+
+            updateLog(logWrite, { status: 'done', message: '✅ 文章生成完成' });
+            setState(prev => ({ ...prev, stage: 'done', wechatArticle: result.data }));
+            showToast('公众号文章已生成');
+        } catch (err) {
+            setState(prev => ({ ...prev, stage: 'error', error: err instanceof Error ? err.message : '生成失败' }));
+        }
+    };
+
     /* ============ RENDER ============ */
     return (
         <div className="app-container">
@@ -1104,7 +1130,7 @@ function WorkspaceInner() {
             <div className="workspace-scroll-container" ref={scrollContainerRef}>
 
                 {/* Idle state — centered greeting + suggestions */}
-                {(state.stage === 'idle' || state.stage === 'error') && state.mode !== 'polish' && state.mode !== 'imitate' && (
+                {(state.stage === 'idle' || state.stage === 'error') && state.mode !== 'polish' && state.mode !== 'imitate' && state.mode !== 'wechat' && (
                     <div className="workspace-greeting">
                         <h1 className="greeting-title">
                             {state.mode === 'xhs' ? '小红书图文创作' : state.mode === 'douyin' ? '抖音脚本创作' : '视频号脚本创作'}
@@ -1120,6 +1146,30 @@ function WorkspaceInner() {
                                     onClick={() => handleTemplateClick(tpl.value)}
                                 >
                                     {tpl.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* WeChat idle greeting */}
+                {(state.stage === 'idle' || state.stage === 'error') && state.mode === 'wechat' && (
+                    <div className="workspace-greeting">
+                        <h1 className="greeting-title">公众号文章创作</h1>
+                        <p className="greeting-subtitle">推荐流量 + 社交裂变 + 搜一搜 SEO，一键生成爆款公众号文章</p>
+                        <div className="greeting-suggestions">
+                            {[
+                                { icon: '💰', text: '2026年普通人最容易忽略的5个副业机会' },
+                                { icon: '🧠', text: 'AI将如何改变每个人的工作方式' },
+                                { icon: '❤️', text: '在北京月薪3万和成都月薪1万，哪个更幸福？' },
+                                { icon: '📚', text: '我花了100万读的MBA，这三条认知最值钱' },
+                            ].map(({ icon, text }) => (
+                                <button
+                                    key={text}
+                                    className="suggestion-chip"
+                                    onClick={() => setState(prev => ({ ...prev, userInput: text }))}
+                                >
+                                    <span style={{ marginRight: 6 }}>{icon}</span> {text}
                                 </button>
                             ))}
                         </div>
@@ -1250,6 +1300,116 @@ function WorkspaceInner() {
                     </div>
                 )}
 
+                {/* WeChat article result */}
+                {state.mode === 'wechat' && state.wechatArticle && state.stage === 'done' && (
+                    <div className="section-card">
+                        <div className="section-header">
+                            <div className="section-title">
+                                公众号文章生成完成
+                            </div>
+                            {state.wechatArticle.word_count && (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                                    {state.wechatArticle.word_count} 字 · {state.wechatArticle.estimated_read_time || '5分钟阅读'}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Titles */}
+                        {state.wechatArticle.titles?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--fg)' }}>备选标题</div>
+                                {state.wechatArticle.titles.map((t, i) => (
+                                    <div key={i} className="title-option" style={{ cursor: 'pointer' }} onClick={() => copyText(t)}>
+                                        <span className="number">{i + 1}.</span>
+                                        <span>{t}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Abstract */}
+                        {state.wechatArticle.abstract && (
+                            <div style={{ background: 'var(--bg-tertiary)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                <strong>文章摘要：</strong>{state.wechatArticle.abstract}
+                            </div>
+                        )}
+
+                        {/* Article Content */}
+                        <div style={{ marginBottom: 16 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <div style={{ fontWeight: 600, color: 'var(--fg)' }}>文章正文</div>
+                                <button className="btn btn-ghost" style={{ fontSize: '0.8rem' }} onClick={() => copyText(state.wechatArticle!.article)}>复制</button>
+                            </div>
+                            <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.8, fontSize: '0.92rem', color: 'var(--fg-secondary)' }}>
+                                {state.wechatArticle.article}
+                            </div>
+                        </div>
+
+                        {/* Golden Quotes */}
+                        {state.wechatArticle.golden_quotes?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--fg)' }}>金句（可截图分享）</div>
+                                {state.wechatArticle.golden_quotes.map((q, i) => (
+                                    <div key={i} style={{
+                                        background: 'linear-gradient(135deg, rgba(245,158,11,0.05), rgba(239,68,68,0.03))',
+                                        border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8,
+                                        padding: '10px 14px', marginBottom: 8, fontSize: '0.88rem',
+                                        cursor: 'pointer', fontStyle: 'italic',
+                                    }} onClick={() => copyText(q)}>
+                                        &ldquo;{q}&rdquo;
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* SEO Keywords */}
+                        {state.wechatArticle.seo_keywords?.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <div style={{ fontWeight: 600, marginBottom: 8, color: 'var(--fg)' }}>SEO 关键词</div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                    {state.wechatArticle.seo_keywords.map((kw, i) => (
+                                        <span key={i} className="template-tag" style={{ fontSize: '0.8rem', cursor: 'pointer' }} onClick={() => copyText(kw)}>{kw}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Traffic Strategy */}
+                        {state.wechatArticle.traffic_strategy && (
+                            <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.05), rgba(168,85,247,0.05))', borderRadius: 8, padding: '14px 18px', marginBottom: 16, fontSize: '0.85rem' }}>
+                                <strong>流量策略建议</strong>
+                                {state.wechatArticle.traffic_strategy.best_publish_time && (
+                                    <div style={{ marginTop: 8 }}>📅 <strong>发布时间：</strong>{state.wechatArticle.traffic_strategy.best_publish_time}</div>
+                                )}
+                                {state.wechatArticle.traffic_strategy.title_analysis && (
+                                    <div style={{ marginTop: 6 }}>🎯 <strong>标题策略：</strong>{state.wechatArticle.traffic_strategy.title_analysis}</div>
+                                )}
+                                {state.wechatArticle.traffic_strategy.algorithm_tips?.map((tip, i) => (
+                                    <div key={i} style={{ marginTop: 4 }}>💡 {tip}</div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="final-actions">
+                            <button className="btn btn-primary" onClick={() => copyText(state.wechatArticle!.article)}>
+                                复制正文
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => copyText(state.wechatArticle!.titles?.join('\n') || '')}>
+                                复制标题
+                            </button>
+                            <button className="btn btn-secondary" onClick={() => copyText(state.wechatArticle!.golden_quotes?.join('\n') || '')}>
+                                复制金句
+                            </button>
+                            <button className="btn btn-secondary" onClick={shareResult} title="分享内容">
+                                <Share2 size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> 分享
+                            </button>
+                            <button className="btn btn-secondary" onClick={reset}>
+                                新建文章
+                            </button>
+                        </div>
+                    </div>
+                )}
                 {/* Live Workflow Log Panel */}
                 {workflowLogs.length > 0 && state.stage !== 'idle' && (
                     <div className="section-card workflow-log-panel">
@@ -1747,7 +1907,8 @@ function WorkspaceInner() {
                         placeholder={
                             state.mode === 'polish' ? '粘贴你要润色的内容...' :
                                 state.mode === 'imitate' ? '粘贴链接或要模仿的内容...' :
-                                    '描述你的创作需求...'
+                                    state.mode === 'wechat' ? '输入公众号文章主题或需求...' :
+                                        '描述你的创作需求...'
                         }
                         rows={3}
                         onKeyDown={e => {
@@ -1755,6 +1916,7 @@ function WorkspaceInner() {
                                 e.preventDefault();
                                 if (state.mode === 'polish') handlePolish();
                                 else if (state.mode === 'imitate') handleImitate();
+                                else if (state.mode === 'wechat') handleWechat();
                                 else handleSubmit();
                             }
                         }}
@@ -1816,6 +1978,7 @@ function WorkspaceInner() {
                             onClick={() => {
                                 if (state.mode === 'polish') handlePolish();
                                 else if (state.mode === 'imitate') handleImitate();
+                                else if (state.mode === 'wechat') handleWechat();
                                 else handleSubmit();
                             }}
                             disabled={state.mode === 'polish' ? state.userInput.trim().length < 10 : !state.userInput.trim()}
@@ -1918,6 +2081,7 @@ function WorkspaceInner() {
                         ['douyin', '抖音'],
                         ['video', '视频号'],
                         ['xhs', '小红书'],
+                        ['wechat', '公众号'],
                         ['polish', '润色'],
                         ['imitate', '模仿'],
                     ] as [string, string][]).map(([key, label]) => (

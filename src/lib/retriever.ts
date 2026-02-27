@@ -15,7 +15,7 @@ export interface KnowledgeChunk {
     use_as: string;
 }
 
-type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate';
+type CreationMode = 'video' | 'xhs' | 'douyin' | 'polish' | 'imitate' | 'wechat';
 
 /**
  * 根据用户输入的文本检索最相关的知识块。
